@@ -45,7 +45,3 @@ LegalFetch is a web application that helps users extract, analyze, and understan
 2. Enter a website URL in the search box
 3. Click "Generate" to extract and analyze the legal documents
 4. View the Terms of Service, Privacy Policy, and summaries
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
