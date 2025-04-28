@@ -1,0 +1,10 @@
+Flask
+requests
+beautifulsoup4
+nltk
+werkzeug
+openai
+wordcloud
+markdown
+gunicorn
+python-dotenv
