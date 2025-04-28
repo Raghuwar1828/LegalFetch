@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard – Legal Fetch</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+          <a href="{{ url_for('index') }}" class="brand">Legal Fetch</a>
+          <ul class="nav-links">
+            {% if 'user_id' in session %}
+              <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+              <li><a href="{{ url_for('logout') }}">Logout</a></li>
+            {% else %}
+              <li><a href="{{ url_for('login') }}">Login</a></li>
+              <li><a href="{{ url_for('register') }}">Register</a></li>
+            {% endif %}
+          </ul>
+          <div class="nav-right">
+            <a href="{{ url_for('about') }}">About</a>
+          </div>
+        </div>
+      </nav>
+      
+
+  <div class="container">
+    <h2>Enter Domain(s)</h2>
+    <form method="POST">
+      <input
+        type="text"
+        name="domains"
+        placeholder="e.g. google.com, example.org"
+        required
+      />
+      <button type="submit">Scrape & Analyze</button>
+    </form>
+
+    {% for r in results %}
+    <section class="card">
+      <h3>{{ r.domain }}</h3>
+      <p><strong>TOS URL:</strong> <a href="{{ r.tos_url }}" target="_blank">{{ r.tos_url }}</a></p>
+      <p><strong>PP URL:</strong>  <a href="{{ r.pp_url  }}" target="_blank">{{ r.pp_url  }}</a></p>
+      <div class="texts">
+        <!-- <div><h4>Terms Text</h4><p>{{ r.tos_text[:500] }}…</p></div>
+        <div><h4>Privacy Text</h4><p>{{ r.pp_text [:500] }}…</p></div> -->
+      </div>
+      <div class="raw-output">
+        <h4>Raw Model Output</h4>
+        <div class="markdown-content">
+          {{ r.raw_html | safe }}
+        </div>
+      </div>
+      <!-- <div class="summaries">
+        <h4>100-Word Summary</h4><p>{{ r.summary_100 }}</p>
+        <h4>  10-Word Summary</h4><p>{{ r.summary_10  }}</p>
+      </div> -->
+      <div class="freq">
+        <h4>Top TOS Words</h4>
+        <ul>
+          {% for w,cnt in r.freq_tos %}
+          <li>{{ w }}: {{ cnt }}</li>
+          {% endfor %}
+        </ul>
+        <h4>Top PP Words</h4>
+        <ul>
+          {% for w,cnt in r.freq_pp %}
+          <li>{{ w }}: {{ cnt }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="wordcloud">
+        <h4>Word Cloud</h4>
+        <img src="{{ r.wordcloud }}" alt="Word Cloud for {{ r.domain }}">
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+</body>
+</html>
