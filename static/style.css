@@ -255,19 +255,107 @@ form button:hover { background:#1f2b4d; }
     overflow-x: auto;
   }
   
-
-  .wordcloud {
-    text-align: center;
+  /* Text Mining Metrics Styling */
+  .text-mining {
     margin-top: 1.5rem;
   }
-  .wordcloud img {
-    max-width: 100%;
-    height: auto;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+
+  .text-mining h4 {
+    color: #2a3d66;
+    margin: 1.5rem 0 0.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+  }
+
+  .metrics-container {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .metric-column {
+    flex: 1;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 0.8rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .metric-column h5 {
+    color: #2a3d66;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    text-align: center;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #eee;
+  }
+
+  .metric-column ul {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0.5rem;
+  }
+
+  .metric-column li {
+    font-size: 0.85rem;
+    padding: 0.2rem 0.4rem;
+    margin-bottom: 0.2rem;
+    border-radius: 3px;
+    background: #eef1f5;
+  }
+
+  .metric-column p {
+    text-align: center;
+    font-size: 0.9rem;
+    margin: 0.3rem 0;
+  }
+
+  .explanation {
+    font-style: italic;
+    color: #666;
+    font-size: 0.85rem !important;
   }
   
+  /* Summaries Section Styling */
+  .summaries-section {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .summaries-section h4 {
+    color: #2a3d66;
+    margin: 1rem 0 0.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+  }
+  
+  .summary-box {
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border-left: 3px solid #2a3d66;
+  }
+  
+  .summary-box h6 {
+    color: #2a3d66;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  .one-word-summary {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #2a3d66;
+    margin-bottom: 0.5rem;
+  }
+  
+  .detailed-summary {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #444;
+  }
 
   /* About Page Container */
 .about-container {

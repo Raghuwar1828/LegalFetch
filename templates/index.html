@@ -5,6 +5,94 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Dashboard – Legal Fetch</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <style>
+    /* Override global form flex layout for search form */
+    .search-form {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 1rem;
+      width: 100%;
+    }
+    .search-form .form-group {
+      width: 100%;
+      margin-bottom: 0 !important;
+    }
+    .form-group {
+      margin-bottom: 15px;
+      width: 100%;
+    }
+    
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    
+    .doc-selection {
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      padding: 12px;
+      margin: 15px 0;
+    }
+    
+    .select-label {
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    .radio-group {
+      display: flex;
+      gap: 15px;
+    }
+    
+    .radio-option {
+      display: inline-flex;
+      align-items: center;
+      background-color: white;
+      padding: 8px 15px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .radio-option:hover {
+      border-color: #0056b3;
+    }
+    
+    .radio-option input[type="radio"] {
+      margin-right: 8px;
+    }
+    
+    .radio-option input[type="radio"]:checked + span {
+      color: #0056b3;
+      font-weight: bold;
+    }
+    
+    button[type="submit"] {
+      background-color: #2d4373;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    
+    button[type="submit"]:hover {
+      background-color: #1e2f4f;
+    }
+    
+    @media (max-width: 768px) {
+      .radio-group {
+        flex-direction: column;
+      }
+    }
+  </style>
 </head>
 <body>
     <nav class="navbar">
@@ -28,52 +116,285 @@
 
   <div class="container">
     <h2>Enter Domain(s)</h2>
-    <form method="POST">
-      <input
-        type="text"
-        name="domains"
-        placeholder="e.g. google.com, example.org"
-        required
-      />
-      <button type="submit">Scrape & Analyze</button>
+    <form class="search-form" method="POST">
+      <div class="form-group">
+        <input
+          type="text"
+          name="domains"
+          placeholder="e.g. google.com, example.org"
+          required
+        />
+      </div>
+      
+      <div class="form-group doc-selection">
+        <p class="select-label">Select document type:</p>
+        <div class="radio-group">
+          <label class="radio-option">
+            <input type="radio" name="doc_type" value="tos" checked> 
+            <span>Terms of Service</span>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="doc_type" value="pp"> 
+            <span>Privacy Policy</span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <button type="submit">Scrape & Analyze</button>
+      </div>
     </form>
 
     {% for r in results %}
     <section class="card">
       <h3>{{ r.domain }}</h3>
+      
+      {% if r.doc_type == 'tos' or not r.doc_type %}
       <p><strong>TOS URL:</strong> <a href="{{ r.tos_url }}" target="_blank">{{ r.tos_url }}</a></p>
+      {% else %}
       <p><strong>PP URL:</strong>  <a href="{{ r.pp_url  }}" target="_blank">{{ r.pp_url  }}</a></p>
+      {% endif %}
+      <p><strong>Document Type:</strong> {% if r.doc_type == 'pp' %}Privacy Policy{% else %}Terms of Service{% endif %}</p>
+      <p><strong>Processing Time:</strong> {{ r.processing_time }}</p>
+      
+      <!-- Prominent Summaries Section -->
+      <div class="summaries-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+        <h4 style="color: #0056b3; margin-bottom: 15px;">Document Summary</h4>
+        <div class="metrics-container" style="display: flex; gap: 20px;">
+          {% if r.doc_type == 'tos' or not r.doc_type %}
+          <div class="metric-column" style="flex: 1; padding: 15px; background-color: white; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h5 style="color: #333; border-bottom: 1px solid #ddd; padding-bottom: 8px;">Terms of Service</h5>
+            <div class="summary-box" style="margin-bottom: 15px;">
+              <h6 style="color: #666;">Short Summary (25 words)</h6>
+              <p class="one-word-summary" style="font-weight: bold; color: #0056b3;">
+                {% if r.tos_summary_25 == "Error" %}
+                <span style="color: #dc3545;">Could not generate summary due to API error</span>
+                {% else %}
+                {{ r.tos_summary_25 }}
+                {% endif %}
+              </p>
+            </div>
+            <div class="summary-box">
+              <h6 style="color: #666;">Detailed Summary (100 words)</h6>
+              <p class="detailed-summary">
+                {% if r.tos_summary_100 == "Error generating summary" %}
+                <span style="color: #dc3545;">Could not generate summary due to API error. This could be because the NVIDIA API endpoint is not accessible or there was an error processing the request.</span>
+                {% else %}
+                {{ r.tos_summary_100 }}
+                {% endif %}
+              </p>
+            </div>
+          </div>
+          {% else %}
+          <div class="metric-column" style="flex: 1; padding: 15px; background-color: white; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h5 style="color: #333; border-bottom: 1px solid #ddd; padding-bottom: 8px;">Privacy Policy</h5>
+            <div class="summary-box" style="margin-bottom: 15px;">
+              <h6 style="color: #666;">Short Summary (25 words)</h6>
+              <p class="one-word-summary" style="font-weight: bold; color: #0056b3;">
+                {% if r.pp_summary_25 == "Error" %}
+                <span style="color: #dc3545;">Could not generate summary due to API error</span>
+                {% else %}
+                {{ r.pp_summary_25 }}
+                {% endif %}
+              </p>
+            </div>
+            <div class="summary-box">
+              <h6 style="color: #666;">Detailed Summary (100 words)</h6>
+              <p class="detailed-summary">
+                {% if r.pp_summary_100 == "Error generating summary" %}
+                <span style="color: #dc3545;">Could not generate summary due to API error. This could be because the NVIDIA API endpoint is not accessible or there was an error processing the request.</span>
+                {% else %}
+                {{ r.pp_summary_100 }}
+                {% endif %}
+              </p>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      
       <div class="texts">
         <!-- <div><h4>Terms Text</h4><p>{{ r.tos_text[:500] }}…</p></div>
         <div><h4>Privacy Text</h4><p>{{ r.pp_text [:500] }}…</p></div> -->
       </div>
-      <div class="raw-output">
-        <h4>Raw Model Output</h4>
-        <div class="markdown-content">
-          {{ r.raw_html | safe }}
-        </div>
-      </div>
-      <!-- <div class="summaries">
-        <h4>100-Word Summary</h4><p>{{ r.summary_100 }}</p>
-        <h4>  10-Word Summary</h4><p>{{ r.summary_10  }}</p>
-      </div> -->
+      
+      <!-- Metadata Sections -->
       <div class="freq">
+        {% if r.doc_type == 'tos' or not r.doc_type %}
         <h4>Top TOS Words</h4>
         <ul>
           {% for w,cnt in r.freq_tos %}
           <li>{{ w }}: {{ cnt }}</li>
           {% endfor %}
         </ul>
+        {% else %}
         <h4>Top PP Words</h4>
         <ul>
           {% for w,cnt in r.freq_pp %}
           <li>{{ w }}: {{ cnt }}</li>
           {% endfor %}
         </ul>
+        {% endif %}
       </div>
-      <div class="wordcloud">
-        <h4>Word Cloud</h4>
-        <img src="{{ r.wordcloud }}" alt="Word Cloud for {{ r.domain }}">
+
+      <!-- Text Mining and Analysis Section -->
+      <h3 style="margin-top:2rem; color:#2a3d66;">Text Mining and Analysis</h3>
+      <!-- Text Mining Metrics -->
+      <div class="text-mining">
+        <h4>1. TF-IDF Analysis</h4>
+        <div class="metrics-container">
+          {% if r.doc_type == 'tos' or not r.doc_type %}
+          <div class="metric-column">
+            <h5>Terms of Service</h5>
+            <ul>
+              {% for word, score in r.tfidf_tos %}
+              <li>{{ word }}: {{ score }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% else %}
+          <div class="metric-column">
+            <h5>Privacy Policy</h5>
+            <ul>
+              {% for word, score in r.tfidf_pp %}
+              <li>{{ word }}: {{ score }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+
+        <h4>2. Document Length Metrics</h4>
+        <div class="metrics-container">
+          {% if r.doc_type == 'tos' or not r.doc_type %}
+          <div class="metric-column">
+            <h5>Terms of Service</h5>
+            <p>Words: {{ r.doc_length_tos.num_words }}</p>
+            <p>Sentences: {{ r.doc_length_tos.num_sentences }}</p>
+            <p>Avg. sentence length: {{ r.doc_length_tos.avg_sentence_length }} words</p>
+          </div>
+          {% else %}
+          <div class="metric-column">
+            <h5>Privacy Policy</h5>
+            <p>Words: {{ r.doc_length_pp.num_words }}</p>
+            <p>Sentences: {{ r.doc_length_pp.num_sentences }}</p>
+            <p>Avg. sentence length: {{ r.doc_length_pp.avg_sentence_length }} words</p>
+          </div>
+          {% endif %}
+        </div>
+
+        <h4>3. Hapax Legomena Ratio (Vocabulary Richness)</h4>
+        <div class="metrics-container">
+          {% if r.doc_type == 'tos' or not r.doc_type %}
+          <div class="metric-column">
+            <h5>Terms of Service</h5>
+            <p>Ratio: {{ r.hapax_tos.ratio }}</p>
+            <p>Number of words occurring once: {{ r.hapax_tos.count }}</p>
+            <p class="explanation">Higher ratio indicates more diverse vocabulary</p>
+            <p>Examples:</p>
+            <ul>
+              {% for word in r.hapax_tos.examples %}
+              <li>{{ word }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% else %}
+          <div class="metric-column">
+            <h5>Privacy Policy</h5>
+            <p>Ratio: {{ r.hapax_pp.ratio }}</p>
+            <p>Number of words occurring once: {{ r.hapax_pp.count }}</p>
+            <p class="explanation">Higher ratio indicates more diverse vocabulary</p>
+            <p>Examples:</p>
+            <ul>
+              {% for word in r.hapax_pp.examples %}
+              <li>{{ word }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+
+        <h4>4. Readability Score (Flesch Reading Ease)</h4>
+        <div class="metrics-container">
+          {% if r.doc_type == 'tos' or not r.doc_type %}
+          <div class="metric-column">
+            <h5>Terms of Service</h5>
+            <p>Score: {{ r.readability_tos|round(1) }}</p>
+            <p class="explanation">
+              {% if r.readability_tos > 90 %}
+                Very Easy to Read
+              {% elif r.readability_tos > 80 %}
+                Easy to Read
+              {% elif r.readability_tos > 70 %}
+                Fairly Easy to Read
+              {% elif r.readability_tos > 60 %}
+                Standard English
+              {% elif r.readability_tos > 50 %}
+                Fairly Difficult
+              {% elif r.readability_tos > 30 %}
+                Difficult
+              {% else %}
+                Very Difficult
+              {% endif %}
+            </p>
+          </div>
+          {% else %}
+          <div class="metric-column">
+            <h5>Privacy Policy</h5>
+            <p>Score: {{ r.readability_pp|round(1) }}</p>
+            <p class="explanation">
+              {% if r.readability_pp > 90 %}
+                Very Easy to Read
+              {% elif r.readability_pp > 80 %}
+                Easy to Read
+              {% elif r.readability_pp > 70 %}
+                Fairly Easy to Read
+              {% elif r.readability_pp > 60 %}
+                Standard English
+              {% elif r.readability_pp > 50 %}
+                Fairly Difficult
+              {% elif r.readability_pp > 30 %}
+                Difficult
+              {% else %}
+                Very Difficult
+              {% endif %}
+            </p>
+          </div>
+          {% endif %}
+        </div>
+
+        <h4>5. Sentiment Analysis</h4>
+        <div class="metrics-container">
+          {% if r.doc_type == 'tos' or not r.doc_type %}
+          <div class="metric-column">
+            <h5>Terms of Service</h5>
+            <p>Polarity: {{ r.sentiment_tos }}</p>
+            <p class="explanation">
+              {% if r.sentiment_tos > 0.3 %}
+                Positive
+              {% elif r.sentiment_tos < -0.3 %}
+                Negative
+              {% else %}
+                Neutral
+              {% endif %}
+            </p>
+          </div>
+          {% else %}
+          <div class="metric-column">
+            <h5>Privacy Policy</h5>
+            <p>Polarity: {{ r.sentiment_pp }}</p>
+            <p class="explanation">
+              {% if r.sentiment_pp > 0.3 %}
+                Positive
+              {% elif r.sentiment_pp < -0.3 %}
+                Negative
+              {% else %}
+                Neutral
+              {% endif %}
+            </p>
+          </div>
+          {% endif %}
+        </div>
       </div>
     </section>
     {% endfor %}

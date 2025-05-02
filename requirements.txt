@@ -4,7 +4,11 @@ beautifulsoup4
 nltk
 werkzeug
 openai
-wordcloud
 markdown
 gunicorn
 python-dotenv
+scikit-learn
+rake-nltk
+spacy
+textstat
+textblob
