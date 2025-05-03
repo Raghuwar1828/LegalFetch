@@ -97,6 +97,15 @@ CREATE TABLE IF NOT EXISTS summary_cache (
 )
 """)
 
+# Create users table for authentication
+c.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT UNIQUE,
+    password TEXT NOT NULL
+)
+""")
+
 conn.commit()
 
 # --- HELPERS ---
