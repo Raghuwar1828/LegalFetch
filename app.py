@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS scrapes (
     summary_100 TEXT,    -- Detailed summary
     summary_25 TEXT,     -- Short summary
     text_metrics TEXT,   -- All text mining metrics stored as JSON
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(domain, agreement_type)
 )
 """)
 
@@ -499,6 +500,38 @@ def index():
         for d in [x.strip() for x in doms.split(",") if x.strip()]:
             start_time = time.time()  # Start timing
             
+            # Check if the domain and agreement_type combination already exists in the database
+            c.execute("SELECT id FROM scrapes WHERE domain = ? AND agreement_type = ?", (d, agreement_type))
+            existing_record = c.fetchone()
+            
+            if existing_record:
+                # If the record already exists, retrieve it instead of creating a new one
+                c.execute("SELECT * FROM scrapes WHERE id = ?", (existing_record[0],))
+                record = c.fetchone()
+                
+                # Format the result to display
+                text_metrics = eval(record[7])  # Convert the string back to a dictionary
+                
+                # Calculate processing time (minimal since we're just retrieving)
+                processing_time = time.time() - start_time
+                time_str = f"{processing_time*1000:.0f}ms"
+                
+                # Add retrieved result to display list
+                result = {
+                    "domain": record[1],
+                    "agreement_type": record[2],
+                    "url": record[3],
+                    "text": record[4],
+                    "summary_100": record[5],
+                    "summary_25": record[6],
+                    "text_metrics": text_metrics,
+                    "processing_time": time_str,
+                    "note": "Retrieved from database (already exists)"
+                }
+                
+                results.append(result)
+                continue
+            
             # find policy links
             tos_url, pp_url = find_policy_links(d)
             
@@ -601,7 +634,7 @@ def index():
             
             # Add result to display list
             result = {
-                    "domain": d,
+                "domain": d,
                 "agreement_type": agreement_type,
                 "url": url,
                 "text": text,
