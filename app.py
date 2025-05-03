@@ -10,8 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash
-
+    session, flash, jsonify
 )
 
 import nltk
@@ -20,7 +19,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize, sent_tokenize
 from collections import Counter
 from werkzeug.security import generate_password_hash, check_password_hash
-from openai import OpenAI
+import json
 import io, base64
 import os
 from dotenv import load_dotenv
@@ -36,25 +35,19 @@ from textblob import TextBlob
 # Load environment variables from the .env file
 load_dotenv()
 
-# Access your OpenAI API key from the environment variable
-openai_api_key = os.environ.get("OPENAI_API_KEY")
-if not openai_api_key:
-    print("WARNING: OPENAI_API_KEY not found in environment variables. Summarization will use local fallback methods.")
+# Access your Gemini API key from the environment variable
+gemini_api_key = os.environ.get("GEMINI_API_KEY")
+if not gemini_api_key:
+    print("WARNING: GEMINI_API_KEY not found in environment variables. Summarization will use local fallback methods.")
 
-# NVIDIA API endpoint configuration
-nvidia_api_base = os.environ.get("NVIDIA_API_BASE", "https://integrate.api.nvidia.com/v1")
+# Gemini API endpoint configuration
+gemini_api_base = "https://generativelanguage.googleapis.com/v1beta"
+gemini_model = "gemini-2.0-flash-lite"
 
 txt = ""
 # --- CONFIGURATION ---
 app = Flask(__name__)
 app.secret_key = "YOUR_SECRET_KEY_HERE"  # ← change this!
-
-# Initialize NVIDIA/OpenAI client
-# Initialize NVIDIA Ollama-like OpenAI Endpoint
-client = OpenAI(
-    base_url=nvidia_api_base,
-    api_key=openai_api_key
-)
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -154,6 +147,53 @@ def clean_tokens(text):
     t = re.sub(r'[^a-z\s]', '', text.lower())
     return [w for w in t.split() if w and w not in stops]
 
+def call_gemini_api(prompt):
+    """Make a call to the Gemini API"""
+    # Load environment variables from the .env file to ensure we have the latest API key
+    load_dotenv()
+    
+    # Get API key from environment
+    gemini_api_key = os.environ.get("GEMINI_API_KEY")
+    
+    if not gemini_api_key:
+        raise ValueError("GEMINI_API_KEY not found in environment variables")
+        
+    # Set up the API endpoint and headers
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={gemini_api_key}"
+    api_headers = {
+        "Content-Type": "application/json"
+    }
+    
+    # Request payload
+    data = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "generationConfig": {
+            "temperature": 0.4,
+            "topP": 0.95,
+            "maxOutputTokens": 1000
+        }
+    }
+    
+    # Make the API request
+    response = requests.post(url, headers=api_headers, json=data)
+    
+    # Check response status
+    if response.status_code == 200:
+        result = response.json()
+        if "candidates" in result and len(result["candidates"]) > 0:
+            content = result["candidates"][0]["content"]
+            return content["parts"][0]["text"]
+        else:
+            print("Unexpected response format from Gemini API")
+            print(f"Response: {json.dumps(result, indent=2)}")
+            return None
+    else:
+        print(f"Error calling Gemini API: {response.status_code}")
+        print(f"Response: {response.text}")
+        return None
+
 def summarize_tos_pp(tos_text, pp_text, company_name=None):
     # First check if we have a cached result for this exact content
     tos_hash = hash(tos_text[:1000] if tos_text else "")  # Use first 1000 chars as hash key
@@ -176,8 +216,8 @@ def summarize_tos_pp(tos_text, pp_text, company_name=None):
     
     try:
         # Check if API key exists
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY not set in environment variables")
+        if not gemini_api_key:
+            raise ValueError("GEMINI_API_KEY not set in environment variables")
             
         # Use the improved prompt from the create_improved_summary_prompt function
         if tos_text:
@@ -187,39 +227,10 @@ def summarize_tos_pp(tos_text, pp_text, company_name=None):
         else:
             raise ValueError("No text provided for summarization")
             
-        try:
-            # Try non-streaming first for reliability
-            resp = client.chat.completions.create(
-                model="nvidia/llama-3.3-nemotron-base-8b",
-                messages=[{"role":"system","content": prompt}],
-                temperature=0.6,
-                top_p=0.95,
-                max_tokens=1000,
-                frequency_penalty=0,
-                presence_penalty=0
-            )
-            full_txt = resp.choices[0].message.content
-        except Exception as stream_error:
-            print(f"Non-streaming API failed: {stream_error}")
-            
-            # Try streaming as fallback
-            resp = client.chat.completions.create(
-                model="nvidia/llama-3.3-nemotron-base-8b",
-                messages=[{"role":"system","content": prompt}],
-                temperature=0.6,
-                top_p=0.95,
-                max_tokens=1000,
-                frequency_penalty=0,
-                presence_penalty=0,
-                stream=True
-            )
-            
-            # Accumulate chunks
-            full_txt = ""
-            for chunk in resp:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    full_txt += delta
+        # Call Gemini API
+        full_txt = call_gemini_api(prompt)
+        if not full_txt:
+            raise ValueError("Empty response from Gemini API")
       
         # Split into clean lines
         lines = [line.strip() for line in full_txt.splitlines() if line.strip()]
@@ -275,56 +286,8 @@ def summarize_tos_pp(tos_text, pp_text, company_name=None):
         
     except Exception as e:
         print(f"Error in summarization: {e}")
-        
-        # Use local fallback summaries if API fails
-        if tos_text:
-            try:
-                # Create a meaningful paragraph from first few sentences
-                tos_sentences = sent_tokenize(tos_text)[:8]
-                first_paragraph = " ".join(tos_sentences[:3])[:400]
-                
-                company_prefix = f"{company_name}'s " if company_name else ""
-                
-                tos_summary_100 = (
-                    f"{company_prefix}Terms of Service govern the relationship between users and the service provider. "
-                    "Based on the document's initial section: \"" + first_paragraph + "...\" "
-                    "This legal agreement typically covers usage rights, content policies, account requirements, and liability limitations."
-                )
-                
-                tos_summary_25 = f"{company_prefix}Terms outline usage rules, user obligations, and service provider rights regarding content and account access."
-            except:
-                company_prefix = f"{company_name}'s " if company_name else ""
-                tos_summary_100 = f"{company_prefix}Terms of Service establish the legal agreement between users and the service provider. They typically cover acceptable use policies, intellectual property rights, account termination conditions, and liability limitations."
-                tos_summary_25 = f"{company_prefix}Terms outline user obligations and service provider rights regarding platform usage."
-        else:
-            company_reference = f" for {company_name}" if company_name else ""
-            tos_summary_100 = f"No terms of service document was found{company_reference}."
-            tos_summary_25 = f"No Terms of Service document found{company_reference}."
-            
-        if pp_text:
-            try:
-                pp_sentences = sent_tokenize(pp_text)[:8]
-                first_paragraph = " ".join(pp_sentences[:3])[:400]
-                
-                company_prefix = f"{company_name}'s " if company_name else ""
-                
-                pp_summary_100 = (
-                    f"{company_prefix}Privacy Policy explains how the service handles user data. "
-                    "Based on the document's initial section: \"" + first_paragraph + "...\" "
-                    "This policy typically details what information is collected, how it's used, third-party sharing practices, and user privacy controls."
-                )
-                
-                pp_summary_25 = f"{company_prefix}Policy describes data collection, usage, sharing practices, and user privacy options."
-            except:
-                company_prefix = f"{company_name}'s " if company_name else ""
-                pp_summary_100 = f"{company_prefix}Privacy Policy outlines how user data is collected, processed, and shared."
-                pp_summary_25 = f"{company_prefix}Policy explains data collection, usage, sharing practices, and privacy controls."
-        else:
-            company_reference = f" for {company_name}" if company_name else ""
-            pp_summary_100 = f"No privacy policy document was found{company_reference}."
-            pp_summary_25 = f"No Privacy Policy document found{company_reference}."
-            
-        return "", tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
+        # No fallback methods - just return empty values
+        return "", f"Error: {str(e)}", f"Error: {str(e)[:50]}", f"Error: {str(e)}", f"Error: {str(e)[:50]}"
 
 def analyze_tos_pp(tos_text, pp_text, company_name=None):
     # clean & tokens
@@ -666,74 +629,110 @@ def index():
                 results.append(result)
                 continue
             
-            # find policy links
-            tos_url, pp_url = find_policy_links(d)
-            
-            # Select URL based on agreement type
-            url = tos_url if agreement_type == 'tos' else pp_url
-            if not url:
-                doc_type = 'Terms of Service' if agreement_type=='tos' else 'Privacy Policy'
-                flash(f"No valid {doc_type} URL found for '{d}'", "danger")
-                continue
-            
-            # Fetch and analyze text
-            text = fetch_text(url)
-            if text.startswith("https"):
-                text = fetch_text(text)
-            
-            if not text:
-                flash(f"No content found at {url}", "danger")
-                continue
-            
-            # Extract company name from domain
-            company_name = extract_company_name(d)
+            # All-or-nothing approach: only save to DB if everything succeeds
+            try:
+                # Step 1: Find policy links
+                tos_url, pp_url = find_policy_links(d)
                 
-            # Calculate summaries based on agreement type
-            if agreement_type == "tos":
-                raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
-            else:  # pp
-                raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
-            
-            # Calculate simplified text mining metrics
-            text_metrics = calculate_simple_metrics(text)
-            
-            # Calculate processing time
-            processing_time = time.time() - start_time
-            
-            # Save to database
-            c.execute(
-                """INSERT OR IGNORE INTO scrapes (
-                    domain, agreement_type, url, text, summary_100, summary_25,
-                    text_metrics
-                ) VALUES (?,?,?,?,?,?,?)""",
-                (
-                    d, agreement_type, url, text, summary_100, summary_25,
-                    str(text_metrics)
+                # Select URL based on agreement type
+                url = tos_url if agreement_type == 'tos' else pp_url
+                if not url:
+                    doc_type = 'Terms of Service' if agreement_type=='tos' else 'Privacy Policy'
+                    raise ValueError(f"No valid {doc_type} URL found for '{d}'")
+                
+                # Step 2: Fetch and analyze text
+                text = fetch_text(url)
+                if text.startswith("https"):
+                    text = fetch_text(text)
+                
+                if not text:
+                    raise ValueError(f"No content found at {url}")
+                
+                # Step 3: Extract company name from domain
+                company_name = extract_company_name(d)
+                    
+                # Step 4: Calculate summaries based on agreement type
+                if agreement_type == "tos":
+                    raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
+                else:  # pp
+                    raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
+                
+                # Check for summarization errors
+                if summary_100.startswith("Error:") or summary_25.startswith("Error:"):
+                    raise ValueError(f"Summarization failed: {summary_100}")
+                
+                # Step 5: Calculate simplified text mining metrics
+                text_metrics = calculate_simple_metrics(text)
+                
+                # All steps succeeded - now save to database
+                c.execute(
+                    """INSERT OR IGNORE INTO scrapes (
+                        domain, agreement_type, url, text, summary_100, summary_25,
+                        text_metrics
+                    ) VALUES (?,?,?,?,?,?,?)""",
+                    (
+                        d, agreement_type, url, text, summary_100, summary_25,
+                        str(text_metrics)
+                    )
                 )
-            )
-            scrape_id = c.lastrowid
-            conn.commit()
+                scrape_id = c.lastrowid
+                conn.commit()
+                
+                # Calculate processing time
+                processing_time = time.time() - start_time
+                
+                # Format processing time
+                if processing_time < 1:
+                    time_str = f"{processing_time*1000:.0f}ms"
+                else:
+                    time_str = f"{processing_time:.1f}s"
+                
+                # Add result to display list
+                result = {
+                    "domain": d,
+                    "agreement_type": agreement_type,
+                    "url": url,
+                    "text": text,
+                    "summary_100": summary_100,
+                    "summary_25": summary_25,
+                    "text_metrics": text_metrics,
+                    "processing_time": time_str,
+                    "note": "Successfully processed and saved to database"
+                }
+                
+                results.append(result)
+                
+            except Exception as e:
+                # Any error in the process - don't save to database
+                error_message = str(e)
+                flash(f"Error processing '{d}': {error_message}", "danger")
+                
+                # Calculate processing time
+                processing_time = time.time() - start_time
+                
+                # Format processing time
+                if processing_time < 1:
+                    time_str = f"{processing_time*1000:.0f}ms"
+                else:
+                    time_str = f"{processing_time:.1f}s"
+                
+                # Add error result to display list
+                result = {
+                    "domain": d,
+                    "agreement_type": agreement_type,
+                    "url": url if 'url' in locals() else "Not found",
+                    "text": text if 'text' in locals() else "Not extracted",
+                    "summary_100": f"Error: {error_message}",
+                    "summary_25": f"Error: Processing failed",
+                    "text_metrics": {} if 'text_metrics' not in locals() else text_metrics,
+                    "processing_time": time_str,
+                    "note": f"Failed: {error_message} - Not saved to database"
+                }
+                
+                results.append(result)
             
-            # Format processing time
-            if processing_time < 1:
-                time_str = f"{processing_time*1000:.0f}ms"
-            else:
-                time_str = f"{processing_time:.1f}s"
-            
-            # Add result to display list
-            result = {
-                "domain": d,
-                "agreement_type": agreement_type,
-                "url": url,
-                "text": text,
-                "summary_100": summary_100,
-                "summary_25": summary_25,
-                "text_metrics": text_metrics,
-                "processing_time": time_str
-            }
-            
-            results.append(result)
-            time.sleep(1)  # be polite
+            # Be polite with the server
+            time.sleep(1)
 
     # Render with the selected agreement type to maintain form state
     return render_template("index.html", results=results, selected_type=selected_type)
@@ -794,6 +793,164 @@ def sql_viewer():
                           total_rows=total_rows,
                           has_more=has_more,
                           total_pages=(total_rows // page_size) + (1 if total_rows % page_size > 0 else 0))
+
+@app.route("/api/process", methods=["POST"])
+def api_process():
+    """
+    API endpoint to process a URL for TOS or PP analysis
+    Expects JSON with:
+    {
+        "url": "example.com",
+        "agreement_type": "tos" or "pp"
+    }
+    """
+    # Get JSON data from request
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No JSON data provided"}), 400
+        
+        # Extract domain and agreement type
+        domain = data.get("url")
+        agreement_type = data.get("agreement_type")
+        
+        # Validate inputs
+        if not domain:
+            return jsonify({"success": False, "error": "URL is required"}), 400
+        
+        if agreement_type not in ["tos", "pp"]:
+            return jsonify({"success": False, "error": "Agreement type must be 'tos' or 'pp'"}), 400
+        
+        # Check if record already exists
+        c.execute("SELECT id FROM scrapes WHERE domain = ? AND agreement_type = ?", (domain, agreement_type))
+        existing_record = c.fetchone()
+        
+        if existing_record:
+            # Record already exists, return it
+            c.execute("SELECT * FROM scrapes WHERE id = ?", (existing_record[0],))
+            record = c.fetchone()
+            
+            # Extract company name and prefix summaries
+            company_name = extract_company_name(domain)
+            
+            # Format the result for API response
+            text_metrics = eval(record[7])  # Convert the string back to a dictionary
+            
+            result = {
+                "success": True,
+                "domain": record[1],
+                "agreement_type": record[2],
+                "url": record[3],
+                "summary_100": record[5],
+                "summary_25": record[6],
+                "text_metrics": text_metrics,
+                "message": "Retrieved from database (already exists)"
+            }
+            
+            return jsonify(result)
+        
+        # All-or-nothing approach: only save to DB if everything succeeds
+        try:
+            start_time = time.time()  # Start timing
+            
+            # Step 1: Find policy links
+            tos_url, pp_url = find_policy_links(domain)
+            
+            # Select URL based on agreement type
+            url = tos_url if agreement_type == 'tos' else pp_url
+            if not url:
+                doc_type = 'Terms of Service' if agreement_type=='tos' else 'Privacy Policy'
+                raise ValueError(f"No valid {doc_type} URL found for '{domain}'")
+            
+            # Step 2: Fetch and analyze text
+            text = fetch_text(url)
+            if text.startswith("https"):
+                text = fetch_text(text)
+            
+            if not text:
+                raise ValueError(f"No content found at {url}")
+                
+            # Step 2.5: Check if there are at least 200 words in the text
+            word_count = len(text.split())
+            if word_count < 200:
+                raise ValueError(f"Text content too short ({word_count} words). Minimum 200 words required for processing.")
+            
+            # Step 3: Extract company name from domain
+            company_name = extract_company_name(domain)
+                
+            # Step 4: Calculate summaries based on agreement type
+            if agreement_type == "tos":
+                raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
+            else:  # pp
+                raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
+            
+            # Check for summarization errors
+            if summary_100.startswith("Error:") or summary_25.startswith("Error:"):
+                raise ValueError(f"Summarization failed: {summary_100}")
+            
+            # Step 5: Calculate simplified text mining metrics
+            text_metrics = calculate_simple_metrics(text)
+            
+            # All steps succeeded - now save to database
+            c.execute(
+                """INSERT OR IGNORE INTO scrapes (
+                    domain, agreement_type, url, text, summary_100, summary_25,
+                    text_metrics
+                ) VALUES (?,?,?,?,?,?,?)""",
+                (
+                    domain, agreement_type, url, text, summary_100, summary_25,
+                    str(text_metrics)
+                )
+            )
+            scrape_id = c.lastrowid
+            conn.commit()
+            
+            # Calculate processing time
+            processing_time = time.time() - start_time
+            time_str = f"{processing_time:.2f}s"
+            
+            # Return success response
+            result = {
+                "success": True,
+                "domain": domain,
+                "agreement_type": agreement_type,
+                "url": url,
+                "summary_100": summary_100,
+                "summary_25": summary_25,
+                "text_metrics": text_metrics,
+                "processing_time": time_str,
+                "message": "Successfully processed and saved to database"
+            }
+            
+            return jsonify(result)
+            
+        except Exception as e:
+            # Any error in the process - don't save to database
+            error_message = str(e)
+            
+            # Calculate processing time
+            processing_time = time.time() - start_time if 'start_time' in locals() else 0
+            time_str = f"{processing_time:.2f}s"
+            
+            # Return error response
+            result = {
+                "success": False,
+                "domain": domain,
+                "agreement_type": agreement_type,
+                "url": url if 'url' in locals() else "Not found",
+                "error": error_message,
+                "processing_time": time_str,
+                "message": f"Failed: {error_message} - Not saved to database"
+            }
+            
+            return jsonify(result), 400
+            
+    except Exception as e:
+        # Handle any unexpected exceptions
+        return jsonify({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }), 500
 
 # Download NLTK resources
 nltk.download('punkt')

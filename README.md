@@ -1,63 +1,49 @@
-# Legal Fetch
+# LegalFetch with Gemini API Integration
 
-A web application for fetching, analyzing, and summarizing legal documents like Terms of Service and Privacy Policies from websites.
+This application uses the Google Gemini API to analyze Terms of Service and Privacy Policy documents.
 
-## Features
+## Setup Instructions
 
-- User authentication system for secure access
-- Fetch terms of service and privacy policies from websites
-- Analyze text with NLP techniques
-- Generate word clouds and frequency analysis
-- Summarize documents using AI
-- Save and organize your analyses
+1. Get a Gemini API key from [Google AI Studio](https://ai.google.dev/).
 
-## Technologies Used
+2. Create a `.env` file in the root directory with your Gemini API key:
+   ```
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
 
-- Python 3.10+
-- Flask web framework
-- NLTK for natural language processing
-- OpenAI API for AI-powered summaries
-- SQLite for database
-- HTML/CSS for frontend
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
 
-## Installation
+4. Run the application:
+   ```
+   python app.py
+   ```
 
-1. Clone the repository:
-```bash
-git clone https://github.com/Raghuwar1828/LegalFetch.git
-cd LegalFetch
+## Testing the Gemini API
+
+You can test if your Gemini API is working correctly by running:
+
+```
+python test_gemini_http.py
 ```
 
-2. Create and activate a virtual environment:
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+This script will make a simple request to the Gemini API and display the response.
 
-3. Install the dependencies:
-```bash
-pip install -r requirements.txt
-```
+## API Information
 
-4. Set up your OpenAI API key in a .env file:
-```
-OPENAI_API_KEY=your_api_key_here
-```
+This application uses the Gemini 2.0 Flash-Lite model, which provides:
+- Cost-efficient performance
+- Multimodal input support (text, image, video, audio)
+- 1 million token context window
+- Maximum 8k token output
 
-5. Run the application:
-```bash
-python app.py
-```
+## Troubleshooting
 
-6. Open your browser and navigate to `http://127.0.0.1:5000`
+If you encounter issues with the API:
 
-## Usage
-
-1. Register an account or log in
-2. Enter domain names in the search field
-3. View and analyze the fetched legal documents
-4. Save analyses for future reference
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
+1. Verify your API key is correct
+2. Check that you have internet connectivity
+3. Look for error messages in the console output
+4. Try running the test script to isolate API-specific issues 
