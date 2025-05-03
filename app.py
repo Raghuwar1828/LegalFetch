@@ -64,53 +64,57 @@ headers = {
 # --- DATABASE SETUP ---
 conn = sqlite3.connect("app.db", check_same_thread=False)
 c = conn.cursor()
-# users table
-c.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY,
-    username TEXT UNIQUE,
-    password TEXT
-)
-""")
-# scrapes table
+
+# Drop existing tables if they exist
+c.execute("DROP TABLE IF EXISTS scrapes")
+c.execute("DROP TABLE IF EXISTS summary_cache")
+c.execute("DROP TABLE IF EXISTS word_frequencies")
+
+# Create new scrapes table with text mining metrics as JSON
 c.execute("""
 CREATE TABLE IF NOT EXISTS scrapes (
     id INTEGER PRIMARY KEY,
-    user_id INTEGER,
     domain TEXT,
-    tos_url TEXT,
-    pp_url TEXT,
-    tos_text TEXT,
-    pp_text TEXT,
-    tos_summary_100 TEXT,
-    tos_summary_25 TEXT,
-    pp_summary_100 TEXT,
-    pp_summary_25 TEXT,
-    freq_tos TEXT,
-    freq_pp TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id)
+    agreement_type TEXT,  -- 'tos' or 'pp'
+    url TEXT,            -- URL of the document
+    text TEXT,           -- Full text of the document
+    summary_100 TEXT,    -- Detailed summary
+    summary_25 TEXT,     -- Short summary
+    text_metrics TEXT,   -- All text mining metrics stored as JSON
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
-# summary cache table
+
+# Create summary cache table
 c.execute("""
 CREATE TABLE IF NOT EXISTS summary_cache (
     id INTEGER PRIMARY KEY,
-    tos_hash INTEGER,
-    pp_hash INTEGER,
+    tos_hash TEXT,
+    pp_hash TEXT,
     raw_text TEXT,
     tos_summary_100 TEXT,
     tos_summary_25 TEXT,
     pp_summary_100 TEXT,
     pp_summary_25 TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tos_hash, pp_hash)
 )
 """)
-# Add an index for faster lookups
+
+# Create word frequencies table
 c.execute("""
-CREATE INDEX IF NOT EXISTS idx_summary_cache 
-ON summary_cache(tos_hash, pp_hash)
+CREATE TABLE IF NOT EXISTS word_frequencies (
+    id INTEGER PRIMARY KEY,
+    scrape_id INTEGER,
+    word TEXT,
+    frequency INTEGER,
+    tf_idf_score REAL,
+    is_hapax BOOLEAN,
+    FOREIGN KEY (scrape_id) REFERENCES scrapes(id),
+    UNIQUE(scrape_id, word)
+)
 """)
+
 conn.commit()
 
 # --- HELPERS ---
@@ -284,43 +288,6 @@ def summarize_tos_pp(tos_text, pp_text):
                 elif idx+1 < len(lines):
                     pp_summary_25 = lines[idx+1].lstrip("- ").strip()
 
-        # Verify and adjust summary lengths
-        def adjust_summary(summary, target_length, min_length, max_length, fallback):
-            if not summary:
-                return fallback
-                
-            word_count = len(summary.split())
-            
-            if word_count < min_length:
-                summary += f" (Note: This summary contains only {word_count} words, below the target of {target_length} words)"
-            elif word_count > max_length:
-                # Truncate to max_length words
-                words = summary.split()
-                summary = " ".join(words[:max_length]) + "..."
-                
-            return summary
-        
-        # Apply length checks and adjustments
-        tos_summary_100 = adjust_summary(
-            tos_summary_100, 100, 90, 110, 
-            "The terms of service outline the user's rights and responsibilities when using the service. They typically cover acceptable use policies, content ownership, account termination conditions, and liability limitations. Users must agree to these terms to access the service, and violations may result in account suspension or termination. The service provider usually reserves the right to modify these terms, with continued use signifying acceptance of changes."
-        )
-        
-        tos_summary_25 = adjust_summary(
-            tos_summary_25, 25, 15, 35,
-            "Terms govern user rights, responsibilities, and restrictions while using the service."
-        )
-        
-        pp_summary_100 = adjust_summary(
-            pp_summary_100, 100, 90, 110,
-            "The privacy policy explains how user data is collected, processed, stored, and shared. It typically details what personal information is gathered, how cookies and tracking technologies are implemented, third-party data sharing practices, and security measures in place. Users may have options to control certain data collection aspects, though some information is essential for service functionality. The policy also outlines user rights regarding their personal information."
-        )
-        
-        pp_summary_25 = adjust_summary(
-            pp_summary_25, 25, 15, 35,
-            "Policy explains how user data is collected, used, stored, and shared with third parties."
-        )
-
         # Cache the results
         c.execute("""
             INSERT INTO summary_cache 
@@ -342,7 +309,6 @@ def summarize_tos_pp(tos_text, pp_text):
                 tos_sentences = sent_tokenize(tos_text)[:8]
                 first_paragraph = " ".join(tos_sentences[:3])[:400]
                 
-                # Create a more structured manual summary
                 tos_summary_100 = (
                     "The Terms of Service govern the relationship between users and the service provider. "
                     "Based on the document's initial section: \"" + first_paragraph + "...\" "
@@ -351,20 +317,17 @@ def summarize_tos_pp(tos_text, pp_text):
                 
                 tos_summary_25 = "Terms outline usage rules, user obligations, and service provider rights regarding content and account access."
             except:
-                # Ultimate fallback
-                tos_summary_100 = "The Terms of Service establish the legal agreement between users and the service provider. They typically cover acceptable use policies, intellectual property rights, account termination conditions, and liability limitations. Users must comply with these terms to maintain service access."
+                tos_summary_100 = "The Terms of Service establish the legal agreement between users and the service provider. They typically cover acceptable use policies, intellectual property rights, account termination conditions, and liability limitations."
                 tos_summary_25 = "Terms outline user obligations and service provider rights regarding platform usage."
         else:
-            tos_summary_100 = "No terms of service document was found for this website. Without Terms of Service, it's unclear what rules govern the use of this service and what rights users have when interacting with it."
+            tos_summary_100 = "No terms of service document was found for this website."
             tos_summary_25 = "No Terms of Service document found."
             
         if pp_text:
             try:
-                # Create a meaningful paragraph from first few sentences
                 pp_sentences = sent_tokenize(pp_text)[:8]
                 first_paragraph = " ".join(pp_sentences[:3])[:400]
                 
-                # Create a more structured manual summary
                 pp_summary_100 = (
                     "The Privacy Policy explains how the service handles user data. "
                     "Based on the document's initial section: \"" + first_paragraph + "...\" "
@@ -373,16 +336,13 @@ def summarize_tos_pp(tos_text, pp_text):
                 
                 pp_summary_25 = "Policy describes data collection, usage, sharing practices, and user privacy options."
             except:
-                # Ultimate fallback
-                pp_summary_100 = "The Privacy Policy outlines how user data is collected, processed, and shared. It typically covers what personal information is gathered, cookie usage, third-party data sharing, security measures, and user rights regarding their information."
+                pp_summary_100 = "The Privacy Policy outlines how user data is collected, processed, and shared."
                 pp_summary_25 = "Policy explains data collection, usage, sharing practices, and privacy controls."
         else:
-            pp_summary_100 = "No privacy policy document was found for this website. Without a Privacy Policy, it's unclear how this service handles user data, what information they collect, or how they protect user privacy."
+            pp_summary_100 = "No privacy policy document was found for this website."
             pp_summary_25 = "No Privacy Policy document found."
             
         return "", tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
-
-
 
 def analyze_tos_pp(tos_text, pp_text):
     # clean & tokens
@@ -395,123 +355,99 @@ def analyze_tos_pp(tos_text, pp_text):
     return raw_output, freq_tos, freq_pp, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
 
 def calculate_text_metrics(tos_text, pp_text):
+    """
+    Calculate comprehensive text mining metrics for legal documents.
+    Returns a dictionary containing all metrics.
+    """
     metrics = {}
     
-    # 1. TF-IDF Analysis
-    documents = [tos_text, pp_text]
-    vectorizer = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform(documents)
-    feature_names = vectorizer.get_feature_names_out()
-    
-    # Top TF-IDF words for TOS
-    tos_tfidf = tfidf_matrix[0].toarray()[0]
-    tos_top_indices = np.argsort(tos_tfidf)[::-1][:10]
-    tos_top_tfidf = [(feature_names[i], round(tos_tfidf[i], 3)) for i in tos_top_indices]
-    
-    # Top TF-IDF words for PP
-    pp_tfidf = tfidf_matrix[1].toarray()[0] if len(documents) > 1 else []
-    pp_top_indices = np.argsort(pp_tfidf)[::-1][:10] if len(documents) > 1 else []
-    pp_top_tfidf = [(feature_names[i], round(pp_tfidf[i], 3)) for i in pp_top_indices] if len(documents) > 1 else []
-    
-    metrics['tfidf_tos'] = tos_top_tfidf
-    metrics['tfidf_pp'] = pp_top_tfidf
-    
-    # 2. Document Length Metrics
-    # For TOS
-    if tos_text:
-        tos_words = word_tokenize(tos_text)
-        tos_sentences = sent_tokenize(tos_text)
-        tos_num_words = len(tos_words)
-        tos_num_sentences = len(tos_sentences)
-        tos_avg_sentence_length = tos_num_words / tos_num_sentences if tos_num_sentences > 0 else 0
-        
-        metrics['doc_length_tos'] = {
-            'num_words': tos_num_words,
-            'num_sentences': tos_num_sentences,
-            'avg_sentence_length': round(tos_avg_sentence_length, 2)
+    def analyze_single_document(text, doc_type, other_text=None):
+        if not text:
+            return {
+                'tfidf': [],
+                'readability': {'flesch_ease': 0, 'flesch_grade': 0, 'gunning_fog': 0},
+                'sentiment': {'polarity': 0, 'subjectivity': 0},
+                'doc_stats': {'words': 0, 'sentences': 0, 'avg_length': 0},
+                'hapax': {'ratio': 0, 'count': 0, 'examples': []}
+            }
+            
+        # 1. TF-IDF Analysis with better preprocessing
+        try:
+            # Create a small corpus for better TF-IDF calculation
+            mini_corpus = [text]
+            if other_text:  # Add the other document if available
+                mini_corpus.append(other_text)
+                
+            vectorizer = TfidfVectorizer(
+                stop_words='english',
+                max_features=1000,
+                ngram_range=(1, 2)  # Include bigrams
+            )
+            tfidf_matrix = vectorizer.fit_transform(mini_corpus)
+            feature_names = vectorizer.get_feature_names_out()
+            
+            # Get scores for the target document
+            doc_tfidf = tfidf_matrix[0].toarray()[0]
+            top_indices = np.argsort(doc_tfidf)[::-1][:10]
+            top_tfidf = [(feature_names[i], float(doc_tfidf[i])) for i in top_indices]
+        except ValueError:
+            top_tfidf = []
+            
+        # 2. Readability Analysis
+        try:
+            readability = {
+                'flesch_ease': textstat.flesch_reading_ease(text),
+                'flesch_grade': textstat.flesch_kincaid_grade(text),
+                'gunning_fog': textstat.gunning_fog(text)
+            }
+        except:
+            readability = {'flesch_ease': 0, 'flesch_grade': 0, 'gunning_fog': 0}
+            
+        # 3. Sentiment Analysis with TextBlob
+        try:
+            blob = TextBlob(text)
+            sentiment = {
+                'polarity': round(blob.sentiment.polarity, 3),
+                'subjectivity': round(blob.sentiment.subjectivity, 3)
+            }
+        except:
+            sentiment = {'polarity': 0, 'subjectivity': 0}
+            
+        # 4. Document Length Metrics
+        words = word_tokenize(text)
+        sentences = sent_tokenize(text)
+        # filter out non-alphanumeric tokens
+        clean_words = [w for w in words if w.isalnum()]
+        num_words = len(clean_words)
+        num_sentences = len(sentences)
+        avg_len = num_words / num_sentences if num_sentences > 0 else 0
+        doc_stats = {
+            'words': num_words,
+            'sentences': num_sentences,
+            'avg_length': round(avg_len, 2)
         }
-    else:
-        metrics['doc_length_tos'] = {
-            'num_words': 0,
-            'num_sentences': 0,
-            'avg_sentence_length': 0
+
+        # 5. Hapax Legomena Ratio
+        wc = Counter(clean_words)
+        hapax_words = [w for w,c in wc.items() if c == 1]
+        hapax_ratio = len(hapax_words) / num_words if num_words else 0
+        hapax = {
+            'ratio': round(hapax_ratio, 4),
+            'count': len(hapax_words),
+            'examples': hapax_words[:10]
         }
-        
-    # For PP
-    if pp_text:
-        pp_words = word_tokenize(pp_text)
-        pp_sentences = sent_tokenize(pp_text)
-        pp_num_words = len(pp_words)
-        pp_num_sentences = len(pp_sentences)
-        pp_avg_sentence_length = pp_num_words / pp_num_sentences if pp_num_sentences > 0 else 0
-        
-        metrics['doc_length_pp'] = {
-            'num_words': pp_num_words,
-            'num_sentences': pp_num_sentences,
-            'avg_sentence_length': round(pp_avg_sentence_length, 2)
-        }
-    else:
-        metrics['doc_length_pp'] = {
-            'num_words': 0,
-            'num_sentences': 0,
-            'avg_sentence_length': 0
-        }
-    
-    # 3. Hapax Legomena Ratio (Vocabulary Richness)
-    # For TOS
-    if tos_text:
-        tos_words = word_tokenize(tos_text.lower())
-        tos_word_counts = Counter(tos_words)
-        tos_hapax_legomena = [word for word, count in tos_word_counts.items() if count == 1]
-        tos_hapax_ratio = len(tos_hapax_legomena) / len(tos_words) if tos_words else 0
-        
-        metrics['hapax_tos'] = {
-            'ratio': round(tos_hapax_ratio, 4),
-            'count': len(tos_hapax_legomena),
-            'examples': tos_hapax_legomena[:10]  # First 10 examples of words that appear only once
-        }
-    else:
-        metrics['hapax_tos'] = {
-            'ratio': 0,
-            'count': 0,
-            'examples': []
-        }
-        
-    # For PP
-    if pp_text:
-        pp_words = word_tokenize(pp_text.lower())
-        pp_word_counts = Counter(pp_words)
-        pp_hapax_legomena = [word for word, count in pp_word_counts.items() if count == 1]
-        pp_hapax_ratio = len(pp_hapax_legomena) / len(pp_words) if pp_words else 0
-        
-        metrics['hapax_pp'] = {
-            'ratio': round(pp_hapax_ratio, 4),
-            'count': len(pp_hapax_legomena),
-            'examples': pp_hapax_legomena[:10]  # First 10 examples of words that appear only once
-        }
-    else:
-        metrics['hapax_pp'] = {
-            'ratio': 0,
-            'count': 0,
-            'examples': []
+
+        return {
+            'tfidf': top_tfidf,
+            'readability': readability,
+            'sentiment': sentiment,
+            'doc_stats': doc_stats,
+            'hapax': hapax
         }
     
-    # 4. Readability Score
-    metrics['readability_tos'] = textstat.flesch_reading_ease(tos_text) if tos_text else 0
-    metrics['readability_pp'] = textstat.flesch_reading_ease(pp_text) if pp_text else 0
-    
-    # 5. Sentiment Analysis
-    if tos_text:
-        tos_blob = TextBlob(tos_text)
-        metrics['sentiment_tos'] = round(tos_blob.sentiment.polarity, 3)
-    else:
-        metrics['sentiment_tos'] = 0
-    
-    if pp_text:
-        pp_blob = TextBlob(pp_text)
-        metrics['sentiment_pp'] = round(pp_blob.sentiment.polarity, 3)
-    else:
-        metrics['sentiment_pp'] = 0
+    # Analyze both documents
+    metrics['tos'] = analyze_single_document(tos_text, 'tos', pp_text)
+    metrics['pp'] = analyze_single_document(pp_text, 'pp', tos_text)
     
     return metrics
 
@@ -554,141 +490,188 @@ def logout():
     return redirect(url_for("login"))
 
 @app.route("/", methods=["GET","POST"])
-@login_required
 def index():
     results = []
     if request.method=="POST":
         doms = request.form["domains"]
-        doc_type = request.form.get("doc_type", "tos")  # Default to TOS if not specified
+        agreement_type = request.form.get("agreement_type", "tos")
         
         for d in [x.strip() for x in doms.split(",") if x.strip()]:
-            # Check for existing scrape record to avoid duplicates
-            c.execute(
-                """
-                SELECT tos_url, pp_url, tos_text, pp_text, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
-                FROM scrapes
-                WHERE user_id = ? AND domain = ?
-                ORDER BY timestamp DESC LIMIT 1
-                """,
-                (session["user_id"], d)
-            )
-            cached = c.fetchone()
-            if cached:
-                # Use cached results
-                tos_url, pp_url, tos_text, pp_text, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 = cached
-                # Compute frequency and metrics based on selected document type
-                if doc_type == "tos":
-                    freq_tos = Counter(clean_tokens(tos_text)).most_common(10) if tos_text else []
-                    freq_pp = []
-                else:
-                    freq_tos = []
-                    freq_pp = Counter(clean_tokens(pp_text)).most_common(10) if pp_text else []
-                text_metrics = calculate_text_metrics(tos_text, pp_text)
-                # Append cached result
-                results.append({
-                    "domain": d,
-                    "tos_url": tos_url,
-                    "pp_url": pp_url,
-                    "tos_text": tos_text,
-                    "pp_text": pp_text,
-                    "tos_summary_100": tos_summary_100,
-                    "tos_summary_25": tos_summary_25,
-                    "pp_summary_100": pp_summary_100,
-                    "pp_summary_25": pp_summary_25,
-                    "freq_tos": freq_tos,
-                    "freq_pp": freq_pp,
-                    "doc_type": doc_type,
-                    # Add text mining metrics
-                    "tfidf_tos": text_metrics['tfidf_tos'],
-                    "tfidf_pp": text_metrics['tfidf_pp'],
-                    "doc_length_tos": text_metrics['doc_length_tos'],
-                    "doc_length_pp": text_metrics['doc_length_pp'],
-                    "hapax_tos": text_metrics['hapax_tos'],
-                    "hapax_pp": text_metrics['hapax_pp'],
-                    "readability_tos": text_metrics['readability_tos'],
-                    "readability_pp": text_metrics['readability_pp'],
-                    "sentiment_tos": text_metrics['sentiment_tos'],
-                    "sentiment_pp": text_metrics['sentiment_pp'],
-                    "processing_time": "from cache"
-                })
-                continue  # Skip scraping and saving
-
-            # No cached record, proceed with scraping
-            start_time = time.time()
+            start_time = time.time()  # Start timing
+            
+            # find policy links
             tos_url, pp_url = find_policy_links(d)
             
-            # Based on selected document type, only fetch and analyze that document
-            tos_text = ""
-            pp_text = ""
+            # Select URL based on agreement type
+            url = tos_url if agreement_type == 'tos' else pp_url
+            if not url:
+                doc_type = 'Terms of Service' if agreement_type=='tos' else 'Privacy Policy'
+                flash(f"No valid {doc_type} URL found for '{d}'", "danger")
+                continue
             
-            if doc_type == "tos":
-                tos_text = fetch_text(tos_url) if tos_url else ""
-                if tos_text.startswith("https"):
-                    tos_text = fetch_text(tos_text)
-                freq_tos = Counter(clean_tokens(tos_text)).most_common(10) if tos_text else []
-                freq_pp = []
-            else:  # doc_type == "pp"
-                pp_text = fetch_text(pp_url) if pp_url else ""
-                if pp_text.startswith("https"):
-                    pp_text = fetch_text(pp_text)
-                freq_tos = []
-                freq_pp = Counter(clean_tokens(pp_text)).most_common(10) if pp_text else []
+            # Fetch and analyze text
+            text = fetch_text(url)
+            if text.startswith("https"):
+                text = fetch_text(text)
             
-            # Only call summarize_tos_pp once and use its returned values
-            raw_output, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 = summarize_tos_pp(tos_text, pp_text)
-            raw_html = markdown.markdown(raw_output, extensions=["fenced_code", "tables"])
+            if not text:
+                flash(f"No content found at {url}", "danger")
+                continue
+            
+            # Calculate summaries based on agreement type
+            if agreement_type == "tos":
+                raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "")
+            else:  # pp
+                raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text)
             
             # Calculate text mining metrics
-            text_metrics = calculate_text_metrics(tos_text, pp_text)
+            try:
+                metrics = calculate_text_metrics(text if agreement_type == "tos" else "", 
+                                              text if agreement_type == "pp" else "")
+                
+                # Get the metrics for the current document type
+                doc_metrics = metrics['tos'] if agreement_type == "tos" else metrics['pp']
+                
+                # Prepare metrics dictionary with enhanced structure
+                text_metrics = {
+                    "document_stats": {
+                        "word_count": doc_metrics['doc_stats']['words'],
+                        "sentence_count": doc_metrics['doc_stats']['sentences'],
+                        "avg_sentence_length": doc_metrics['doc_stats']['avg_length']
+                    },
+                    "hapax": {
+                        "ratio": doc_metrics['hapax']['ratio'],
+                        "count": doc_metrics['hapax']['count'],
+                        "examples": doc_metrics['hapax']['examples']
+                    },
+                    "readability": {
+                        "flesch_score": doc_metrics['readability']['flesch_ease'],
+                        "flesch_grade": doc_metrics['readability']['flesch_grade'],
+                        "gunning_fog": doc_metrics['readability']['gunning_fog'],
+                        "sentiment_score": doc_metrics['sentiment']['polarity'],
+                        "subjectivity": doc_metrics['sentiment']['subjectivity']
+                    },
+                    "key_terms": doc_metrics['tfidf'][:5],
+                    "word_frequency": Counter(clean_tokens(text)).most_common(10)
+                }
+                
+            except ValueError as e:
+                flash(f"Analysis failed for '{d}': {str(e)}", "danger")
+                continue
             
-            end_time = time.time()
-            processing_time = end_time - start_time
-            print(f"Processing time for {d}: {processing_time:.2f} seconds")
+            # Calculate processing time
+            processing_time = time.time() - start_time
             
-            # save to DB
-            c.execute("""
-            INSERT INTO scrapes
-            (user_id,domain,tos_url,pp_url,tos_text,pp_text,tos_summary_100,tos_summary_25,pp_summary_100,pp_summary_25,freq_tos,freq_pp)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-            """,(
-                session["user_id"], d, tos_url, pp_url,
-                tos_text, pp_text, tos_summary_100, tos_summary_25,
-                pp_summary_100, pp_summary_25,
-                str(freq_tos), str(freq_pp)
-            ))
+            # Save to database
+            c.execute(
+                """INSERT INTO scrapes (
+                    domain, agreement_type, url, text, summary_100, summary_25,
+                    text_metrics
+                ) VALUES (?,?,?,?,?,?,?)""",
+                (
+                    d, agreement_type, url, text, summary_100, summary_25,
+                    str(text_metrics)
+                )
+            )
+            scrape_id = c.lastrowid
             conn.commit()
-
-            results.append({
+            
+            # Save word frequencies separately
+            word_counts = Counter(clean_tokens(text))
+            for w, freq in word_counts.items():
+                tfidf_score = 0.0
+                for term, score in text_metrics['key_terms']:
+                    if term == w:
+                        tfidf_score = score
+                        break
+                is_hap = (freq == 1)
+                c.execute(
+                    """INSERT OR IGNORE INTO word_frequencies (
+                        scrape_id, word, frequency, tf_idf_score, is_hapax
+                    ) VALUES (?,?,?,?,?)""",
+                    (scrape_id, w, freq, tfidf_score, is_hap)
+                )
+            conn.commit()
+            
+            # Format processing time
+            if processing_time < 1:
+                time_str = f"{processing_time*1000:.0f}ms"
+            else:
+                time_str = f"{processing_time:.1f}s"
+            
+            # Add result to display list
+            result = {
                 "domain": d,
-                "tos_url": tos_url,
-                "pp_url": pp_url,
-                "tos_text": tos_text,
-                "pp_text": pp_text,
-                "tos_summary_100": tos_summary_100,
-                "tos_summary_25": tos_summary_25,
-                "pp_summary_100": pp_summary_100,
-                "pp_summary_25": pp_summary_25,
-                "raw_output": raw_output,
-                "raw_html": raw_html,
-                "freq_tos": freq_tos,
-                "freq_pp": freq_pp,
-                "doc_type": doc_type,  # Add document type to the results
-                # Add text mining metrics
-                "tfidf_tos": text_metrics['tfidf_tos'],
-                "tfidf_pp": text_metrics['tfidf_pp'],
-                "doc_length_tos": text_metrics['doc_length_tos'],
-                "doc_length_pp": text_metrics['doc_length_pp'],
-                "hapax_tos": text_metrics['hapax_tos'],
-                "hapax_pp": text_metrics['hapax_pp'],
-                "readability_tos": text_metrics['readability_tos'],
-                "readability_pp": text_metrics['readability_pp'],
-                "sentiment_tos": text_metrics['sentiment_tos'],
-                "sentiment_pp": text_metrics['sentiment_pp'],
-                "processing_time": f"{processing_time:.2f}s"
-            })
+                "agreement_type": agreement_type,
+                "url": url,
+                "text": text,
+                "summary_100": summary_100,
+                "summary_25": summary_25,
+                "text_metrics": text_metrics,
+                "processing_time": time_str
+            }
+            
+            results.append(result)
             time.sleep(1)  # be polite
 
     return render_template("index.html", results=results)
+
+@app.route("/sql_viewer", methods=["GET"])
+@login_required
+def sql_viewer():
+    # Get list of tables
+    c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = c.fetchall()
+    table_list = [table[0] for table in tables]
+    
+    # Pagination parameters
+    page = request.args.get('page', 1, type=int)
+    page_size = 100
+    offset = (page - 1) * page_size
+    
+    # Default to 'scrapes' table if present, else use the first available table
+    default_table = 'scrapes' if 'scrapes' in table_list else (table_list[0] if table_list else None)
+    selected_table = request.args.get('table', default_table)
+    selected_columns = request.args.getlist('columns')
+    
+    table_data = None
+    columns = None
+    has_more = False
+    total_rows = 0
+    
+    if selected_table:
+        # Get column information
+        c.execute(f"PRAGMA table_info({selected_table})")
+        columns = [column[1] for column in c.fetchall()]
+        
+        # Get total row count
+        c.execute(f"SELECT COUNT(*) FROM {selected_table}")
+        total_rows = c.fetchone()[0]
+        
+        # If specific columns are selected, use them
+        if selected_columns:
+            cols_str = ", ".join(selected_columns)
+        else:
+            cols_str = "*"
+            selected_columns = columns  # Select all columns by default
+        
+        # Get table data with pagination
+        c.execute(f"SELECT {cols_str} FROM {selected_table} LIMIT {page_size} OFFSET {offset}")
+        table_data = c.fetchall()
+        
+        # Check if there are more rows
+        has_more = offset + len(table_data) < total_rows
+    
+    return render_template("sql_viewer.html", 
+                          tables=table_list, 
+                          selected_table=selected_table,
+                          all_columns=columns,
+                          selected_columns=selected_columns,
+                          table_data=table_data,
+                          page=page,
+                          total_rows=total_rows,
+                          has_more=has_more,
+                          total_pages=(total_rows // page_size) + (1 if total_rows % page_size > 0 else 0))
 
 # Download NLTK resources
 nltk.download('punkt')

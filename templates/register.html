@@ -86,6 +86,7 @@
       <ul class="nav-links">
         {% if 'user_id' in session %}
           <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+          <li><a href="{{ url_for('sql_viewer') }}">SQL Viewer</a></li>
           <li><a href="{{ url_for('logout') }}">Logout</a></li>
         {% else %}
           <li><a href="{{ url_for('login') }}">Login</a></li>

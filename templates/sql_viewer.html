@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SQL Viewer – Legal Fetch</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <style>
+    .sql-viewer-container {
+      padding: 20px;
+    }
+    
+    .table-selector {
+      margin-bottom: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+    }
+    
+    .table-selector form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    
+    .table-selector select {
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      min-width: 200px;
+    }
+    
+    .refresh-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+    
+    .auto-refresh-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .refresh-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #ccc;
+      display: inline-block;
+    }
+    
+    .refresh-indicator.active {
+      background-color: #28a745;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+      100% {
+        opacity: 1;
+      }
+    }
+    
+    .refresh-countdown {
+      font-size: 12px;
+      color: #666;
+      margin-left: 5px;
+    }
+    
+    .table-selector button {
+      background-color: #2d4373;
+      color: white;
+      padding: 8px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .table-selector button:hover {
+      background-color: #1e2f4f;
+    }
+    
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 14px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      overflow-x: auto;
+      display: block;
+    }
+    
+    .data-table th {
+      background-color: #2d4373;
+      color: white;
+      text-align: left;
+      padding: 12px 15px;
+      position: sticky;
+      top: 0;
+    }
+    
+    .data-table td {
+      padding: 10px 15px;
+      border-bottom: 1px solid #ddd;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .data-table tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    
+    .data-table tr:hover {
+      background-color: #f1f3f5;
+    }
+    
+    .table-info {
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    
+    .no-data {
+      text-align: center;
+      padding: 30px;
+      color: #666;
+    }
+    
+    /* Button Styles */
+    .btn-primary {
+      background-color: #2d4373;
+      color: white;
+      padding: 8px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .btn-primary:hover {
+      background-color: #1e2f4f;
+    }
+    
+    .btn-secondary {
+      background-color: #6c757d;
+      color: white;
+      padding: 8px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .btn-secondary:hover {
+      background-color: #5a6268;
+    }
+    
+    /* Pagination Styles */
+    .pagination {
+      margin-top: 20px;
+      padding: 10px 0;
+    }
+    
+    .pagination-btn {
+      background-color: #2d4373;
+      color: white;
+      padding: 8px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      display: inline-block;
+    }
+    
+    .pagination-btn:hover {
+      background-color: #1e2f4f;
+    }
+    
+    .page-info {
+      padding: 8px 0;
+      color: #666;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .table-selector form {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+    
+    /* Override global form flex for the column selection form */
+    #column-form {
+      display: block !important;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="{{ url_for('index') }}" class="brand">Legal Fetch</a>
+      <ul class="nav-links">
+        {% if 'user_id' in session %}
+          <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+          <li><a href="{{ url_for('sql_viewer') }}">SQL Viewer</a></li>
+          <li><a href="{{ url_for('logout') }}">Logout</a></li>
+        {% else %}
+          <li><a href="{{ url_for('login') }}">Login</a></li>
+          <li><a href="{{ url_for('register') }}">Register</a></li>
+        {% endif %}
+      </ul>
+      <div class="nav-right">
+        <a href="{{ url_for('about') }}">About</a>
+      </div>
+    </div>
+  </nav>
+  
+  <div class="container sql-viewer-container">
+    <h2>SQL Database Viewer</h2>
+    <p>View and explore the application's database tables and records.</p>
+    
+    <div class="table-selector">
+      <form method="get" action="{{ url_for('sql_viewer') }}">
+        <label for="table-select">Select table:</label>
+        <select id="table-select" name="table" onchange="this.form.submit()">
+          {% for table in tables %}
+            <option value="{{ table }}" {% if table == selected_table %}selected{% endif %}>{{ table }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">View Table</button>
+        
+        <div class="refresh-controls">
+          <div class="auto-refresh-toggle">
+            <label for="auto-refresh">
+              <input type="checkbox" id="auto-refresh"> Auto-refresh
+            </label>
+            <span class="refresh-indicator" id="refresh-indicator"></span>
+            <span class="refresh-countdown" id="refresh-countdown"></span>
+          </div>
+          <button type="button" id="manual-refresh" onclick="location.reload()">Refresh Now</button>
+        </div>
+      </form>
+    </div>
+    
+    <!-- Pagination controls at the top -->
+    {% if selected_table and table_data %}
+    <div class="pagination" style="display: flex; justify-content: space-between; margin: 20px 0;">
+      <div>
+        {% if page > 1 %}
+        <a href="{{ url_for('sql_viewer', table=selected_table, page=page-1, columns=selected_columns) }}" 
+           class="pagination-btn prev-btn">&laquo; Previous</a>
+        {% endif %}
+      </div>
+      <div class="page-info">
+        Page {{ page }} of {{ total_pages }}
+      </div>
+      <div>
+        {% if has_more %}
+        <a href="{{ url_for('sql_viewer', table=selected_table, page=page+1, columns=selected_columns) }}" 
+           class="pagination-btn next-btn">Next &raquo;</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    
+    <!-- Column Selection Controls -->
+    {% if all_columns and selected_table %}
+    <div class="column-selector" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+      <h3>Select Columns</h3>
+      <form method="get" action="{{ url_for('sql_viewer') }}" id="column-form" onsubmit="return validateColumnForm()">
+        <input type="hidden" name="table" value="{{ selected_table }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        
+        <!-- Column checkboxes in the middle -->
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid #dee2e6; border-radius: 4px;">
+          {% for column in all_columns %}
+          <div style="background-color: white; padding: 8px 12px; border-radius: 4px; border: 1px solid #ddd;">
+            <label style="display: flex; align-items: center; cursor: pointer; width: 100%;">
+              <input type="checkbox" name="columns" value="{{ column }}" 
+                {% if column in selected_columns %}checked{% endif %}
+                style="margin-right: 5px;">
+              <span style="font-family: monospace;">{{ column }}</span>
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+        
+        <!-- Apply button at the bottom -->
+        <div style="text-align: center; border-top: 1px solid #dee2e6; padding-top: 15px;">
+          <button type="submit" class="btn-primary" style="padding: 10px 20px; font-size: 16px;">Apply Column Selection</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+    
+    {% if selected_table %}
+      <div class="table-info">
+        <h3>Table: {{ selected_table }}</h3>
+        {% if table_data %}
+          <p>Showing {{ table_data|length }} of {{ total_rows }} record(s) (page {{ page }} of {{ total_pages }})</p>
+        {% endif %}
+      </div>
+      
+      {% if all_columns and table_data %}
+        <div style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                {% for column in selected_columns %}
+                  <th>{{ column }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in table_data %}
+                <tr>
+                  {% for cell in row %}
+                    <td title="{{ cell }}">
+                      {% if cell is string and cell|length > 100 %}
+                        {{ cell[:100] }}...
+                      {% else %}
+                        {{ cell }}
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="no-data">
+          <p>No data available for this table.</p>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="no-data">
+        <p>No tables found in the database.</p>
+      </div>
+    {% endif %}
+  </div>
+  
+  <script>
+    // Add JavaScript functionality for auto-refresh and data interaction
+    document.addEventListener('DOMContentLoaded', function() {
+      const autoRefreshCheckbox = document.getElementById('auto-refresh');
+      const refreshIndicator = document.getElementById('refresh-indicator');
+      const refreshCountdown = document.getElementById('refresh-countdown');
+      const tableCells = document.querySelectorAll('.data-table td');
+      
+      // Auto-refresh functionality
+      let refreshInterval = 5; // seconds
+      let countdownTimer;
+      let autoRefreshTimer;
+      let currentCountdown = refreshInterval;
+      
+      // Initialize from localStorage if available
+      const savedAutoRefresh = localStorage.getItem('sqlViewerAutoRefresh');
+      if (savedAutoRefresh === 'true') {
+        autoRefreshCheckbox.checked = true;
+        startAutoRefresh();
+      }
+      
+      // Toggle auto-refresh functionality
+      autoRefreshCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+          startAutoRefresh();
+          localStorage.setItem('sqlViewerAutoRefresh', 'true');
+        } else {
+          stopAutoRefresh();
+          localStorage.setItem('sqlViewerAutoRefresh', 'false');
+        }
+      });
+      
+      // Start auto-refresh functionality
+      function startAutoRefresh() {
+        refreshIndicator.classList.add('active');
+        currentCountdown = refreshInterval;
+        updateCountdown();
+        
+        // Set up countdown timer
+        countdownTimer = setInterval(updateCountdown, 1000);
+        
+        // Set up page refresh timer
+        autoRefreshTimer = setInterval(() => {
+          location.reload();
+        }, refreshInterval * 1000);
+      }
+      
+      // Stop auto-refresh functionality
+      function stopAutoRefresh() {
+        refreshIndicator.classList.remove('active');
+        refreshCountdown.textContent = '';
+        clearInterval(countdownTimer);
+        clearInterval(autoRefreshTimer);
+      }
+      
+      // Update countdown display
+      function updateCountdown() {
+        currentCountdown--;
+        refreshCountdown.textContent = `(${currentCountdown}s)`;
+        
+        if (currentCountdown <= 0) {
+          currentCountdown = refreshInterval;
+        }
+      }
+      
+      // Optional: Add table cell click to view full content
+      tableCells.forEach(cell => {
+        cell.addEventListener('click', function() {
+          if (this.title) {
+            alert(this.title);
+          }
+        });
+      });
+      
+      // Column selection form validation
+      window.validateColumnForm = function() {
+        const checkboxes = document.querySelectorAll('input[name="columns"]:checked');
+        if (checkboxes.length === 0) {
+          alert('Please select at least one column to display');
+          return false;
+        }
+        return true;
+      };
+    });
+  </script>
+</body>
+</html> 

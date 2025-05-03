@@ -6,17 +6,16 @@
   <title>Dashboard – Legal Fetch</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   <style>
-    /* Override global form flex layout for search form */
+    /* Base styles */
     .search-form {
       display: flex !important;
       flex-direction: column !important;
       gap: 1rem;
       width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
     }
-    .search-form .form-group {
-      width: 100%;
-      margin-bottom: 0 !important;
-    }
+    
     .form-group {
       margin-bottom: 15px;
       width: 100%;
@@ -24,73 +23,500 @@
     
     .form-group input[type="text"] {
       width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
       font-size: 16px;
+      transition: border-color 0.3s;
     }
     
+    .form-group input[type="text"]:focus {
+      border-color: #2d4373;
+      outline: none;
+    }
+    
+    /* Document selection styling */
     .doc-selection {
       background-color: #f8f9fa;
-      border-radius: 5px;
-      padding: 12px;
+      border-radius: 8px;
+      padding: 20px;
       margin: 15px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
     .select-label {
-      font-weight: bold;
-      margin-bottom: 10px;
+      font-weight: 600;
+      margin-bottom: 15px;
       color: #333;
+      font-size: 1.1em;
     }
     
     .radio-group {
       display: flex;
-      gap: 15px;
+      gap: 20px;
     }
     
     .radio-option {
       display: inline-flex;
       align-items: center;
       background-color: white;
-      padding: 8px 15px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
       cursor: pointer;
       transition: all 0.2s ease;
     }
     
     .radio-option:hover {
-      border-color: #0056b3;
+      border-color: #2d4373;
+      background-color: #f8f9fa;
     }
     
     .radio-option input[type="radio"] {
-      margin-right: 8px;
+      margin-right: 10px;
+      cursor: pointer;
     }
     
     .radio-option input[type="radio"]:checked + span {
-      color: #0056b3;
-      font-weight: bold;
+      color: #2d4373;
+      font-weight: 600;
     }
     
+    /* Submit button */
     button[type="submit"] {
       background-color: #2d4373;
       color: white;
-      padding: 10px 20px;
+      padding: 12px 24px;
       border: none;
-      border-radius: 4px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 16px;
-      transition: background-color 0.3s;
+      font-weight: 600;
+      transition: all 0.3s;
+      width: 100%;
+      max-width: 200px;
+      margin: 0 auto;
     }
     
     button[type="submit"]:hover {
       background-color: #1e2f4f;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
+    /* Results card styling */
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 20px 0;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .card h3 {
+      color: #2d4373;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+    }
+    
+    /* Metrics sections styling */
+    .summaries-section {
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    
+    .metric-column {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .summary-box {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    
+    .text-preview {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    
+    .text-mining-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+    
+    .metric-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .metric-section h5 {
+      color: #2d4373;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .metric-section h6 {
+      color: #666;
+      margin: 15px 0 10px;
+      font-size: 0.95em;
+    }
+    
+    .metric-section ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .metric-section li {
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .metric-section li:last-child {
+      border-bottom: none;
+    }
+    
+    /* Responsive design */
     @media (max-width: 768px) {
       .radio-group {
         flex-direction: column;
       }
+      
+      .text-mining-metrics {
+        grid-template-columns: 1fr;
+      }
+      
+      .card {
+        padding: 15px;
+      }
+    }
+    
+    /* Score indicators */
+    .score-indicator {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .score-good {
+      background-color: #e3f7e3;
+      color: #2e7d32;
+    }
+    
+    .score-medium {
+      background-color: #fff3e0;
+      color: #f57c00;
+    }
+    
+    .score-poor {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+    
+    /* Word cloud visualization */
+    .word-cloud {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+      text-align: center;
+    }
+    
+    .word-item {
+      display: inline-block;
+      margin: 5px;
+      padding: 5px 10px;
+      background: #f0f0f0;
+      border-radius: 15px;
+      font-size: var(--size);
+      color: #2d4373;
+      transition: all 0.2s;
+    }
+    
+    .word-item:hover {
+      transform: scale(1.1);
+      background: #e0e0e0;
+    }
+
+    /* Word Analysis Grid */
+    .word-analysis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin: 20px 0;
+    }
+
+    /* Word Frequency List */
+    .word-freq-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .word-freq-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .word {
+        min-width: 100px;
+        font-weight: 500;
+    }
+
+    .freq-bar-container {
+        flex-grow: 1;
+        background: #f0f0f0;
+        border-radius: 4px;
+        height: 24px;
+        overflow: hidden;
+    }
+
+    .freq-bar {
+        height: 100%;
+        background: #2d4373;
+        color: white;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        font-size: 0.9em;
+        transition: width 0.3s ease;
+    }
+
+    /* Word Importance (TF-IDF) */
+    .word-importance-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .importance-bar-container {
+        flex-grow: 1;
+        background: #f0f0f0;
+        border-radius: 4px;
+        height: 24px;
+        overflow: hidden;
+    }
+
+    .importance-bar {
+        height: 100%;
+        background: #4CAF50;
+        color: white;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        font-size: 0.9em;
+        transition: width 0.3s ease;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .stat-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .stat-label {
+        display: block;
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+    }
+
+    .stat-value {
+        display: block;
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #2d4373;
+    }
+
+    /* Unique Words Cloud */
+    .unique-words-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 15px;
+    }
+
+    .unique-word {
+        background: #e3f2fd;
+        color: #1565c0;
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 0.9em;
+        transition: all 0.2s;
+    }
+
+    .unique-word:hover {
+        background: #1565c0;
+        color: white;
+        transform: scale(1.05);
+    }
+
+    /* New styles for separated sections */
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .text-mining-section {
+      margin: 30px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 12px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .metric-box {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .metric-value {
+      font-size: 1.8em;
+      font-weight: 600;
+      color: #2d4373;
+      margin: 10px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
+    }
+
+    .metric-label {
+      font-size: 0.5em;
+      color: #666;
+      font-weight: normal;
+    }
+
+    .important-terms-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .term-chip {
+      background: #e3f2fd;
+      padding: 8px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .term-word {
+      color: #1565c0;
+      font-weight: 500;
+    }
+
+    .term-score {
+      background: #1565c0;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 0.8em;
+    }
+
+    @media (max-width: 768px) {
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .metric-value {
+        font-size: 1.5em;
+      }
+    }
+
+    /* Add these styles in the style section */
+    .processing-time {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #f8f9fa;
+      padding: 6px 12px;
+      border-radius: 6px;
+      margin: 10px 0;
+    }
+
+    .time-label {
+      color: #666;
+      font-weight: 500;
+    }
+
+    .time-value {
+      color: #2d4373;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    .sub-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .sub-metric {
+      background: #f8f9fa;
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .sub-label {
+      display: block;
+      font-size: 0.8em;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .sub-value {
+      display: block;
+      font-weight: 600;
+      color: #2d4373;
+    }
+
+    .terms-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -101,6 +527,7 @@
           <ul class="nav-links">
             {% if 'user_id' in session %}
               <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+              <li><a href="{{ url_for('sql_viewer') }}">SQL Viewer</a></li>
               <li><a href="{{ url_for('logout') }}">Logout</a></li>
             {% else %}
               <li><a href="{{ url_for('login') }}">Login</a></li>
@@ -115,6 +542,15 @@
       
 
   <div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container" style="margin-bottom: 1rem;">
+          {% for category, msg in messages %}
+            <div class="flash {{ category }}" style="width: auto;">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
     <h2>Enter Domain(s)</h2>
     <form class="search-form" method="POST">
       <div class="form-group">
@@ -130,11 +566,11 @@
         <p class="select-label">Select document type:</p>
         <div class="radio-group">
           <label class="radio-option">
-            <input type="radio" name="doc_type" value="tos" checked> 
+            <input type="radio" name="agreement_type" value="tos" checked> 
             <span>Terms of Service</span>
           </label>
           <label class="radio-option">
-            <input type="radio" name="doc_type" value="pp"> 
+            <input type="radio" name="agreement_type" value="pp"> 
             <span>Privacy Policy</span>
           </label>
         </div>
@@ -148,252 +584,156 @@
     {% for r in results %}
     <section class="card">
       <h3>{{ r.domain }}</h3>
+      <p><strong>URL:</strong> <a href="{{ r.url }}" target="_blank">{{ r.url }}</a></p>
+      <p><strong>Document Type:</strong> 
+        {% if r.agreement_type == 'pp' %}Privacy Policy{% else %}Terms of Service{% endif %}
+      </p>
+      <div class="processing-time">
+        <span class="time-label">Processing Time:</span>
+        <span class="time-value">{{ r.processing_time }}</span>
+      </div>
       
-      {% if r.doc_type == 'tos' or not r.doc_type %}
-      <p><strong>TOS URL:</strong> <a href="{{ r.tos_url }}" target="_blank">{{ r.tos_url }}</a></p>
-      {% else %}
-      <p><strong>PP URL:</strong>  <a href="{{ r.pp_url  }}" target="_blank">{{ r.pp_url  }}</a></p>
-      {% endif %}
-      <p><strong>Document Type:</strong> {% if r.doc_type == 'pp' %}Privacy Policy{% else %}Terms of Service{% endif %}</p>
-      <p><strong>Processing Time:</strong> {{ r.processing_time }}</p>
-      
-      <!-- Prominent Summaries Section -->
-      <div class="summaries-section" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
-        <h4 style="color: #0056b3; margin-bottom: 15px;">Document Summary</h4>
-        <div class="metrics-container" style="display: flex; gap: 20px;">
-          {% if r.doc_type == 'tos' or not r.doc_type %}
-          <div class="metric-column" style="flex: 1; padding: 15px; background-color: white; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h5 style="color: #333; border-bottom: 1px solid #ddd; padding-bottom: 8px;">Terms of Service</h5>
-            <div class="summary-box" style="margin-bottom: 15px;">
-              <h6 style="color: #666;">Short Summary (25 words)</h6>
-              <p class="one-word-summary" style="font-weight: bold; color: #0056b3;">
-                {% if r.tos_summary_25 == "Error" %}
-                <span style="color: #dc3545;">Could not generate summary due to API error</span>
-                {% else %}
-                {{ r.tos_summary_25 }}
-                {% endif %}
-              </p>
-            </div>
-            <div class="summary-box">
-              <h6 style="color: #666;">Detailed Summary (100 words)</h6>
-              <p class="detailed-summary">
-                {% if r.tos_summary_100 == "Error generating summary" %}
-                <span style="color: #dc3545;">Could not generate summary due to API error. This could be because the NVIDIA API endpoint is not accessible or there was an error processing the request.</span>
-                {% else %}
-                {{ r.tos_summary_100 }}
-                {% endif %}
-              </p>
-            </div>
+      <!-- Summaries Section -->
+      <div class="summaries-section">
+        <h4>Document Summary</h4>
+        <div class="metric-column">
+          <div class="summary-box">
+            <h6>Short Summary</h6>
+            <p>{{ r.summary_25 }}</p>
           </div>
-          {% else %}
-          <div class="metric-column" style="flex: 1; padding: 15px; background-color: white; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h5 style="color: #333; border-bottom: 1px solid #ddd; padding-bottom: 8px;">Privacy Policy</h5>
-            <div class="summary-box" style="margin-bottom: 15px;">
-              <h6 style="color: #666;">Short Summary (25 words)</h6>
-              <p class="one-word-summary" style="font-weight: bold; color: #0056b3;">
-                {% if r.pp_summary_25 == "Error" %}
-                <span style="color: #dc3545;">Could not generate summary due to API error</span>
-                {% else %}
-                {{ r.pp_summary_25 }}
-                {% endif %}
-              </p>
-            </div>
-            <div class="summary-box">
-              <h6 style="color: #666;">Detailed Summary (100 words)</h6>
-              <p class="detailed-summary">
-                {% if r.pp_summary_100 == "Error generating summary" %}
-                <span style="color: #dc3545;">Could not generate summary due to API error. This could be because the NVIDIA API endpoint is not accessible or there was an error processing the request.</span>
-                {% else %}
-                {{ r.pp_summary_100 }}
-                {% endif %}
-              </p>
-            </div>
+          <div class="summary-box">
+            <h6>Detailed Summary</h6>
+            <p>{{ r.summary_100 }}</p>
           </div>
-          {% endif %}
         </div>
       </div>
       
-      <div class="texts">
-        <!-- <div><h4>Terms Text</h4><p>{{ r.tos_text[:500] }}…</p></div>
-        <div><h4>Privacy Text</h4><p>{{ r.pp_text [:500] }}…</p></div> -->
-      </div>
-      
-      <!-- Metadata Sections -->
-      <div class="freq">
-        {% if r.doc_type == 'tos' or not r.doc_type %}
-        <h4>Top TOS Words</h4>
-        <ul>
-          {% for w,cnt in r.freq_tos %}
-          <li>{{ w }}: {{ cnt }}</li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <h4>Top PP Words</h4>
-        <ul>
-          {% for w,cnt in r.freq_pp %}
-          <li>{{ w }}: {{ cnt }}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </div>
-
-      <!-- Text Mining and Analysis Section -->
-      <h3 style="margin-top:2rem; color:#2a3d66;">Text Mining and Analysis</h3>
       <!-- Text Mining Metrics -->
-      <div class="text-mining">
-        <h4>1. TF-IDF Analysis</h4>
-        <div class="metrics-container">
-          {% if r.doc_type == 'tos' or not r.doc_type %}
-          <div class="metric-column">
-            <h5>Terms of Service</h5>
-            <ul>
-              {% for word, score in r.tfidf_tos %}
-              <li>{{ word }}: {{ score }}</li>
+      <div class="text-mining-section">
+        <h4>Text Mining Analysis</h4>
+        <div class="metrics-grid">
+          <!-- Word Frequency Section -->
+          <div class="metric-box full-width">
+            <h5>Most Common Words</h5>
+            <div class="word-freq-list">
+              {% for word, freq in r.text_metrics.word_frequency %}
+              <div class="word-freq-item">
+                <span class="word">{{ word }}</span>
+                <div class="freq-bar-container">
+                  <div class="freq-bar" style="width: {{ (freq / r.text_metrics.word_frequency[0][1] * 100)|round }}%;">
+                    <span class="freq-count">{{ freq }}</span>
+                  </div>
+                </div>
+              </div>
               {% endfor %}
-            </ul>
+            </div>
           </div>
-          {% else %}
-          <div class="metric-column">
-            <h5>Privacy Policy</h5>
-            <ul>
-              {% for word, score in r.tfidf_pp %}
-              <li>{{ word }}: {{ score }}</li>
+
+          <!-- Readability Metrics -->
+          <div class="metric-box">
+            <h5>Readability Analysis</h5>
+            <div class="metric-value">
+              {{ r.text_metrics.readability.flesch_score|round(1) }}
+              <span class="metric-label">Flesch Reading Ease</span>
+              {% set score = r.text_metrics.readability.flesch_score %}
+              <span class="score-indicator 
+                {% if score > 70 %}score-good
+                {% elif score > 50 %}score-medium
+                {% else %}score-poor{% endif %}">
+                {% if score > 70 %}Easy to Read
+                {% elif score > 50 %}Moderate
+                {% else %}Complex{% endif %}
+              </span>
+            </div>
+            <div class="sub-metrics">
+              <div class="sub-metric">
+                <span class="sub-label">Grade Level</span>
+                <span class="sub-value">{{ r.text_metrics.readability.flesch_grade|round(1) }}</span>
+              </div>
+              <div class="sub-metric">
+                <span class="sub-label">Gunning Fog</span>
+                <span class="sub-value">{{ r.text_metrics.readability.gunning_fog|round(1) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sentiment Analysis -->
+          <div class="metric-box">
+            <h5>Sentiment Analysis</h5>
+            <div class="metric-value">
+              {{ r.text_metrics.readability.sentiment_score|round(3) }}
+              <span class="metric-label">Polarity Score</span>
+              {% set sentiment = r.text_metrics.readability.sentiment_score %}
+              <span class="score-indicator 
+                {% if sentiment > 0.2 %}score-good
+                {% elif sentiment < -0.2 %}score-poor
+                {% else %}score-medium{% endif %}">
+                {% if sentiment > 0.2 %}Positive
+                {% elif sentiment < -0.2 %}Negative
+                {% else %}Neutral{% endif %}
+              </span>
+            </div>
+            <div class="sub-metrics">
+              <div class="sub-metric">
+                <span class="sub-label">Subjectivity</span>
+                <span class="sub-value">{{ r.text_metrics.readability.subjectivity|round(3) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Document Statistics -->
+          <div class="metric-box">
+            <h5>Document Statistics</h5>
+            <div class="sub-metrics">
+              <div class="sub-metric">
+                <span class="sub-label">Word Count</span>
+                <span class="sub-value">{{ r.text_metrics.document_stats.word_count }}</span>
+              </div>
+              <div class="sub-metric">
+                <span class="sub-label">Sentence Count</span>
+                <span class="sub-value">{{ r.text_metrics.document_stats.sentence_count }}</span>
+              </div>
+              <div class="sub-metric">
+                <span class="sub-label">Avg. Sentence Length</span>
+                <span class="sub-value">{{ r.text_metrics.document_stats.avg_sentence_length }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hapax Legomena -->
+          <div class="metric-box">
+            <h5>Hapax Legomena</h5>
+            <div class="metric-value">
+              {{ (r.text_metrics.hapax.ratio * 100)|round(1) }}%
+              <span class="metric-label">Hapax Ratio</span>
+            </div>
+            <div class="sub-metrics">
+              <div class="sub-metric">
+                <span class="sub-label">Single-Use Words</span>
+                <span class="sub-value">{{ r.text_metrics.hapax.count }}</span>
+              </div>
+            </div>
+            <div class="terms-cloud">
+              {% for w in r.text_metrics.hapax.examples %}
+              <div class="term-chip">
+                <span class="term-word">{{ w }}</span>
+              </div>
               {% endfor %}
-            </ul>
+            </div>
           </div>
-          {% endif %}
-        </div>
 
-        <h4>2. Document Length Metrics</h4>
-        <div class="metrics-container">
-          {% if r.doc_type == 'tos' or not r.doc_type %}
-          <div class="metric-column">
-            <h5>Terms of Service</h5>
-            <p>Words: {{ r.doc_length_tos.num_words }}</p>
-            <p>Sentences: {{ r.doc_length_tos.num_sentences }}</p>
-            <p>Avg. sentence length: {{ r.doc_length_tos.avg_sentence_length }} words</p>
-          </div>
-          {% else %}
-          <div class="metric-column">
-            <h5>Privacy Policy</h5>
-            <p>Words: {{ r.doc_length_pp.num_words }}</p>
-            <p>Sentences: {{ r.doc_length_pp.num_sentences }}</p>
-            <p>Avg. sentence length: {{ r.doc_length_pp.avg_sentence_length }} words</p>
-          </div>
-          {% endif %}
-        </div>
-
-        <h4>3. Hapax Legomena Ratio (Vocabulary Richness)</h4>
-        <div class="metrics-container">
-          {% if r.doc_type == 'tos' or not r.doc_type %}
-          <div class="metric-column">
-            <h5>Terms of Service</h5>
-            <p>Ratio: {{ r.hapax_tos.ratio }}</p>
-            <p>Number of words occurring once: {{ r.hapax_tos.count }}</p>
-            <p class="explanation">Higher ratio indicates more diverse vocabulary</p>
-            <p>Examples:</p>
-            <ul>
-              {% for word in r.hapax_tos.examples %}
-              <li>{{ word }}</li>
+          <!-- Important Terms -->
+          <div class="metric-box">
+            <h5>Key Terms</h5>
+            <div class="terms-cloud">
+              {% for term, score in r.text_metrics.key_terms %}
+              <div class="term-chip">
+                <span class="term-word">{{ term }}</span>
+                <span class="term-score">{{ score|round(3) }}</span>
+              </div>
               {% endfor %}
-            </ul>
+            </div>
           </div>
-          {% else %}
-          <div class="metric-column">
-            <h5>Privacy Policy</h5>
-            <p>Ratio: {{ r.hapax_pp.ratio }}</p>
-            <p>Number of words occurring once: {{ r.hapax_pp.count }}</p>
-            <p class="explanation">Higher ratio indicates more diverse vocabulary</p>
-            <p>Examples:</p>
-            <ul>
-              {% for word in r.hapax_pp.examples %}
-              <li>{{ word }}</li>
-              {% endfor %}
-            </ul>
-          </div>
-          {% endif %}
-        </div>
-
-        <h4>4. Readability Score (Flesch Reading Ease)</h4>
-        <div class="metrics-container">
-          {% if r.doc_type == 'tos' or not r.doc_type %}
-          <div class="metric-column">
-            <h5>Terms of Service</h5>
-            <p>Score: {{ r.readability_tos|round(1) }}</p>
-            <p class="explanation">
-              {% if r.readability_tos > 90 %}
-                Very Easy to Read
-              {% elif r.readability_tos > 80 %}
-                Easy to Read
-              {% elif r.readability_tos > 70 %}
-                Fairly Easy to Read
-              {% elif r.readability_tos > 60 %}
-                Standard English
-              {% elif r.readability_tos > 50 %}
-                Fairly Difficult
-              {% elif r.readability_tos > 30 %}
-                Difficult
-              {% else %}
-                Very Difficult
-              {% endif %}
-            </p>
-          </div>
-          {% else %}
-          <div class="metric-column">
-            <h5>Privacy Policy</h5>
-            <p>Score: {{ r.readability_pp|round(1) }}</p>
-            <p class="explanation">
-              {% if r.readability_pp > 90 %}
-                Very Easy to Read
-              {% elif r.readability_pp > 80 %}
-                Easy to Read
-              {% elif r.readability_pp > 70 %}
-                Fairly Easy to Read
-              {% elif r.readability_pp > 60 %}
-                Standard English
-              {% elif r.readability_pp > 50 %}
-                Fairly Difficult
-              {% elif r.readability_pp > 30 %}
-                Difficult
-              {% else %}
-                Very Difficult
-              {% endif %}
-            </p>
-          </div>
-          {% endif %}
-        </div>
-
-        <h4>5. Sentiment Analysis</h4>
-        <div class="metrics-container">
-          {% if r.doc_type == 'tos' or not r.doc_type %}
-          <div class="metric-column">
-            <h5>Terms of Service</h5>
-            <p>Polarity: {{ r.sentiment_tos }}</p>
-            <p class="explanation">
-              {% if r.sentiment_tos > 0.3 %}
-                Positive
-              {% elif r.sentiment_tos < -0.3 %}
-                Negative
-              {% else %}
-                Neutral
-              {% endif %}
-            </p>
-          </div>
-          {% else %}
-          <div class="metric-column">
-            <h5>Privacy Policy</h5>
-            <p>Polarity: {{ r.sentiment_pp }}</p>
-            <p class="explanation">
-              {% if r.sentiment_pp > 0.3 %}
-                Positive
-              {% elif r.sentiment_pp < -0.3 %}
-                Negative
-              {% else %}
-                Neutral
-              {% endif %}
-            </p>
-          </div>
-          {% endif %}
         </div>
       </div>
     </section>
