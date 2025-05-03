@@ -62,26 +62,9 @@ def get_success_target():
             print("Invalid input. Please enter a number.")
 
 def get_start_rank(agreement_type):
-    """Get starting rank, offering to continue from previous run"""
-    last_rank = get_last_processed_rank(agreement_type)
-    
-    if last_rank:
-        continue_last = input(f"Current progress: rank {last_rank} for {agreement_type.upper()}. Continue from next rank? (y/n): ")
-        if continue_last.lower().strip() in ['y', 'yes']:
-            return last_rank + 1
-        
-        # If user doesn't want to continue from saved progress, ask for a custom rank
-        while True:
-            try:
-                rank = int(input("Enter the starting rank (1-1,000,000): "))
-                if 1 <= rank <= 1000000:
-                    return rank
-                print("Rank must be between 1 and 1,000,000.")
-            except ValueError:
-                print("Invalid input. Please enter a number.")
-    else:
-        # No saved progress, default to rank 1 without asking
-        return 1
+    """Get starting rank from saved progress or default to 1 without prompting"""
+    last_rank = get_last_processed_rank(agreement_type) or 0
+    return last_rank + 1
 
 def get_last_processed_rank(agreement_type):
     """Get the last processed rank from the progress file"""
