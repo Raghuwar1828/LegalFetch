@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS scrapes (
     domain TEXT,
     agreement_type TEXT,  -- 'tos' or 'pp'
     url TEXT,            -- URL of the document
-    text TEXT,           -- Full text of the document
+    text_length INTEGER,  -- Length of the document (word count)
     summary_100 TEXT,    -- Detailed summary
     summary_25 TEXT,     -- Short summary
     text_metrics TEXT,   -- All text mining metrics stored as JSON
@@ -80,7 +80,6 @@ CREATE TABLE IF NOT EXISTS summary_cache (
     id INTEGER PRIMARY KEY,
     tos_hash TEXT,
     pp_hash TEXT,
-    raw_text TEXT,
     tos_summary_100 TEXT,
     tos_summary_25 TEXT,
     pp_summary_100 TEXT,
@@ -201,18 +200,18 @@ def summarize_tos_pp(tos_text, pp_text, company_name=None):
     
     # Check if we have cached results in the database
     c.execute("""
-        SELECT raw_text, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 
+        SELECT tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 
         FROM summary_cache 
         WHERE tos_hash = ? AND pp_hash = ?
     """, (tos_hash, pp_hash))
     
     cached = c.fetchone()
     if cached:
-        return cached[0], cached[1], cached[2], cached[3], cached[4]
+        return cached[0], cached[1], cached[2], cached[3]
     
     # If no content to summarize, return empty strings
     if not tos_text and not pp_text:
-        return "", "No terms of service found", "No TOS found", "No privacy policy found", "No PP found"
+        return "No terms of service found", "No TOS found", "No privacy policy found", "No PP found"
     
     max_retries = 2  # Try up to 2 more times after the initial attempt
     retry_count = 0
@@ -296,13 +295,13 @@ def summarize_tos_pp(tos_text, pp_text, company_name=None):
             # If we got here, summaries are not empty, so we can cache and return the results
             c.execute("""
                 INSERT INTO summary_cache 
-                (tos_hash, pp_hash, raw_text, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (tos_hash, pp_hash, full_txt, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25))
+                (tos_hash, pp_hash, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (tos_hash, pp_hash, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25))
             
             conn.commit()
             
-            return full_txt, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
+            return tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
             
         except Exception as e:
             if retry_count < max_retries:
@@ -313,7 +312,7 @@ def summarize_tos_pp(tos_text, pp_text, company_name=None):
             else:
                 print(f"Error in summarization after {retry_count} retries: {e}")
                 # No fallback methods - just return empty values with error
-                return "", f"Error: {str(e)}", f"Error: {str(e)[:50]}", f"Error: {str(e)}", f"Error: {str(e)[:50]}"
+                return "", f"Error: {str(e)}", f"Error: {str(e)[:50]}", f"Error: {str(e)[:50]}"
 
 def analyze_tos_pp(tos_text, pp_text, company_name=None):
     # clean & tokens
@@ -322,8 +321,8 @@ def analyze_tos_pp(tos_text, pp_text, company_name=None):
     freq_tos = Counter(tok_tos).most_common(10)
     freq_pp  = Counter(tok_pp).most_common(10)
 
-    raw_output, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 = summarize_tos_pp(tos_text, pp_text, company_name)
-    return raw_output, freq_tos, freq_pp, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
+    tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 = summarize_tos_pp(tos_text, pp_text, company_name)
+    return freq_tos, freq_pp, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
 
 def calculate_text_metrics(tos_text, pp_text):
     metrics = {}
@@ -644,7 +643,7 @@ def index():
                     "domain": record[1],
                     "agreement_type": record[2],
                     "url": record[3],
-                    "text": record[4],
+                    "text_length": record[4],
                     "summary_100": summary_100,
                     "summary_25": summary_25,
                     "text_metrics": text_metrics,
@@ -679,9 +678,9 @@ def index():
                     
                 # Step 4: Calculate summaries based on agreement type
                 if agreement_type == "tos":
-                    raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
+                    summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
                 else:  # pp
-                    raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
+                    _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
                 
                 # Check for summarization errors
                 if summary_100.startswith("Error:") or summary_25.startswith("Error:"):
@@ -693,11 +692,11 @@ def index():
                 # All steps succeeded - now save to database
                 c.execute(
                     """INSERT OR IGNORE INTO scrapes (
-                        domain, agreement_type, url, text, summary_100, summary_25,
+                        domain, agreement_type, url, text_length, summary_100, summary_25,
                         text_metrics
                     ) VALUES (?,?,?,?,?,?,?)""",
                     (
-                        d, agreement_type, url, text, summary_100, summary_25,
+                        d, agreement_type, url, len(text.split()), summary_100, summary_25,
                         str(text_metrics)
                     )
                 )
@@ -718,7 +717,7 @@ def index():
                     "domain": d,
                     "agreement_type": agreement_type,
                     "url": url,
-                    "text": text,
+                    "text_length": len(text.split()),
                     "summary_100": summary_100,
                     "summary_25": summary_25,
                     "text_metrics": text_metrics,
@@ -747,7 +746,7 @@ def index():
                     "domain": d,
                     "agreement_type": agreement_type,
                     "url": url if 'url' in locals() else "Not found",
-                    "text": text if 'text' in locals() else "Not extracted",
+                    "text_length": len(text.split()) if 'text' in locals() else 0,
                     "summary_100": f"Error: {error_message}",
                     "summary_25": f"Error: Processing failed",
                     "text_metrics": {} if 'text_metrics' not in locals() else text_metrics,
@@ -766,14 +765,17 @@ def index():
 @app.route("/sql_viewer", methods=["GET"])
 @login_required
 def sql_viewer():
+    # Create a new cursor for this function
+    sql_cursor = conn.cursor()
+    
     # Get list of tables
-    c.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = c.fetchall()
+    sql_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = sql_cursor.fetchall()
     table_list = [table[0] for table in tables]
     
     # Pagination parameters
     page = request.args.get('page', 1, type=int)
-    page_size = 100
+    page_size = 10  # Reduced page size to 10 items per page
     offset = (page - 1) * page_size
     
     # Default to 'scrapes' table if present, else use the first available table
@@ -788,12 +790,12 @@ def sql_viewer():
     
     if selected_table:
         # Get column information
-        c.execute(f"PRAGMA table_info({selected_table})")
-        columns = [column[1] for column in c.fetchall()]
+        sql_cursor.execute(f"PRAGMA table_info({selected_table})")
+        columns = [column[1] for column in sql_cursor.fetchall()]
         
         # Get total row count
-        c.execute(f"SELECT COUNT(*) FROM {selected_table}")
-        total_rows = c.fetchone()[0]
+        sql_cursor.execute(f"SELECT COUNT(*) FROM {selected_table}")
+        total_rows = sql_cursor.fetchone()[0]
         
         # If specific columns are selected, use them
         if selected_columns:
@@ -803,11 +805,14 @@ def sql_viewer():
             selected_columns = columns  # Select all columns by default
         
         # Get table data with pagination
-        c.execute(f"SELECT {cols_str} FROM {selected_table} LIMIT {page_size} OFFSET {offset}")
-        table_data = c.fetchall()
+        sql_cursor.execute(f"SELECT {cols_str} FROM {selected_table} LIMIT {page_size} OFFSET {offset}")
+        table_data = sql_cursor.fetchall()
         
         # Check if there are more rows
         has_more = offset + len(table_data) < total_rows
+    
+    # Close the cursor when done
+    sql_cursor.close()
     
     return render_template("sql_viewer.html", 
                           tables=table_list, 
@@ -867,6 +872,7 @@ def api_process():
                 "domain": record[1],
                 "agreement_type": record[2],
                 "url": record[3],
+                "text_length": record[4],
                 "summary_100": record[5],
                 "summary_25": record[6],
                 "text_metrics": text_metrics,
@@ -906,9 +912,9 @@ def api_process():
                 
             # Step 4: Calculate summaries based on agreement type
             if agreement_type == "tos":
-                raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
+                summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
             else:  # pp
-                raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
+                _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
             
             # Check for summarization errors
             if summary_100.startswith("Error:") or summary_25.startswith("Error:"):
@@ -920,11 +926,11 @@ def api_process():
             # All steps succeeded - now save to database
             c.execute(
                 """INSERT OR IGNORE INTO scrapes (
-                    domain, agreement_type, url, text, summary_100, summary_25,
+                    domain, agreement_type, url, text_length, summary_100, summary_25,
                     text_metrics
                 ) VALUES (?,?,?,?,?,?,?)""",
                 (
-                    domain, agreement_type, url, text, summary_100, summary_25,
+                    domain, agreement_type, url, len(text.split()), summary_100, summary_25,
                     str(text_metrics)
                 )
             )
@@ -941,6 +947,7 @@ def api_process():
                 "domain": domain,
                 "agreement_type": agreement_type,
                 "url": url,
+                "text_length": len(text.split()),
                 "summary_100": summary_100,
                 "summary_25": summary_25,
                 "text_metrics": text_metrics,
