@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Dashboard – Legal Fetch</title>
+  <title>Home – Legal Fetch</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   <style>
     /* Base styles */
@@ -546,17 +546,17 @@
           <a href="{{ url_for('index') }}" class="brand">Legal Fetch</a>
           <ul class="nav-links">
             {% if 'user_id' in session %}
-              <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+              <li><a href="{{ url_for('index') }}">Home</a></li>
               <li><a href="{{ url_for('sql_viewer') }}">SQL Viewer</a></li>
+            {% endif %}
+            <li><a href="{{ url_for('about') }}">About</a></li>
+            {% if 'user_id' in session %}
               <li><a href="{{ url_for('logout') }}">Logout</a></li>
             {% else %}
               <li><a href="{{ url_for('login') }}">Login</a></li>
               <li><a href="{{ url_for('register') }}">Register</a></li>
             {% endif %}
           </ul>
-          <div class="nav-right">
-            <a href="{{ url_for('about') }}">About</a>
-          </div>
         </div>
       </nav>
       

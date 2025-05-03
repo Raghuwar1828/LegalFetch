@@ -12,17 +12,17 @@
           <a href="{{ url_for('index') }}" class="brand">Legal Fetch</a>
           <ul class="nav-links">
             {% if 'user_id' in session %}
-              <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+              <li><a href="{{ url_for('index') }}">Home</a></li>
               <li><a href="{{ url_for('sql_viewer') }}">SQL Viewer</a></li>
+            {% endif %}
+            <li><a href="{{ url_for('about') }}">About</a></li>
+            {% if 'user_id' in session %}
               <li><a href="{{ url_for('logout') }}">Logout</a></li>
             {% else %}
               <li><a href="{{ url_for('login') }}">Login</a></li>
               <li><a href="{{ url_for('register') }}">Register</a></li>
             {% endif %}
           </ul>
-          <div class="nav-right">
-            <a href="{{ url_for('about') }}">About</a>
-          </div>
         </div>
       </nav>
       
@@ -40,19 +40,37 @@
     </p>
     <h3>How It Works:</h3>
     <ul>
-        <li>Input a website domain (e.g., example.com).</li>
-        <li>Extracts the Terms of Service and Privacy Policy links.</li>
-        <li>Summarizes both documents into concise 100-word and 10-word summaries.</li>
-        <li>Generates a word cloud of common terms used in the TOS and PP.</li>
+        <li>Input one or more website domains (e.g., example.com).</li>
+        <li>Select which document to analyze: Terms of Service or Privacy Policy.</li>
+        <li>Our system automatically finds and extracts the correct legal document.</li>
+        <li>AI-powered summarization creates both detailed (100-word) and brief (25-word) summaries.</li>
+        <li>Advanced text analysis provides readability scores, sentiment analysis, and key term identification.</li>
+        <li>Results are cached for faster retrieval in future searches.</li>
     </ul>
+    
+    <h3>Key Features:</h3>
+    <ul>
+        <li><strong>Cloudflare & CAPTCHA Detection</strong> - Automatically identifies and reports websites protected by security measures.</li>
+        <li><strong>Text Mining Metrics</strong> - Calculates readability scores, sentiment analysis, and identifies statistically significant terms.</li>
+        <li><strong>Filter by Agreement Type</strong> - Focus on either Terms of Service or Privacy Policy documents.</li>
+        <li><strong>SQL Viewer</strong> - Authenticated users can explore the database with filtering, column selection, and auto-refresh capabilities.</li>
+        <li><strong>API Access</strong> - Programmatically access summary data through our REST API.</li>
+    </ul>
+    
     <h3>Why It Matters:</h3>
     <p>
         Understanding the Terms of Service and Privacy Policy of websites is essential for 
         protecting user privacy and ensuring compliance with various legal agreements.
     </p>
     <p>
-        This tool is here to help you save time and make informed decisions by offering 
-        easy-to-understand summaries and insights.
+        This tool helps you save time and make informed decisions by offering 
+        easy-to-understand summaries and key insights through natural language processing.
+    </p>
+    
+    <h3>Technical Implementation:</h3>
+    <p>
+        Legal Fetch is built with Python and Flask, utilizing advanced NLP techniques and the Gemini AI API for summarization.
+        The system features robust error handling, caching mechanisms, and security features to ensure reliable operation.
     </p>
 </div>
 

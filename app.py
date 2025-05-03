@@ -237,7 +237,22 @@ def fetch_text(url):
     try:
         res = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
-        return soup.get_text(separator=' ', strip=True)
+        text = soup.get_text(separator=' ', strip=True)
+        
+        # Check for Cloudflare or CAPTCHA related content
+        cloudflare_captcha_terms = [
+            'cloudflare', 'cloud flare', 'ddos protection', 
+            'captcha', 'security check', 'browser check',
+            'browser verification', 'challenge page', 'ray id',
+            'attention required', 'site checking', 'verify you are human',
+            'robot verification', 'please wait while we verify'
+        ]
+        
+        for term in cloudflare_captcha_terms:
+            if term.lower() in text.lower():
+                raise ValueError(f"Cloudflare or CAPTCHA protection detected: '{term}' found on the page")
+                
+        return text
     except Exception as e:
         print(f"[!] Error scraping {url}: {e}")
         return ""
@@ -831,7 +846,12 @@ def index():
             except Exception as e:
                 # Any error in the process - don't save to database
                 error_message = str(e)
-                flash(f"Error processing '{d}': {error_message}", "danger")
+                
+                # Add specific user-friendly message for Cloudflare/CAPTCHA detection
+                if "Cloudflare or CAPTCHA protection detected" in error_message:
+                    flash(f"Error processing '{d}': Cloudflare or CAPTCHA protection detected. Cannot process this site.", "danger")
+                else:
+                    flash(f"Error processing '{d}': {error_message}", "danger")
                 
                 # Calculate processing time
                 processing_time = time.time() - start_time
@@ -884,6 +904,9 @@ def sql_viewer():
     selected_table = request.args.get('table', default_table)
     selected_columns = request.args.getlist('columns')
     
+    # Get agreement_type filter value (for scrapes table)
+    agreement_type_filter = request.args.get('agreement_type', '')
+    
     table_data = None
     columns = None
     has_more = False
@@ -894,10 +917,6 @@ def sql_viewer():
         sql_cursor.execute(f"PRAGMA table_info({selected_table})")
         columns = [column[1] for column in sql_cursor.fetchall()]
         
-        # Get total row count
-        sql_cursor.execute(f"SELECT COUNT(*) FROM {selected_table}")
-        total_rows = sql_cursor.fetchone()[0]
-        
         # If specific columns are selected, use them
         if selected_columns:
             cols_str = ", ".join(selected_columns)
@@ -905,8 +924,30 @@ def sql_viewer():
             cols_str = "*"
             selected_columns = columns  # Select all columns by default
         
-        # Get table data with pagination
-        sql_cursor.execute(f"SELECT {cols_str} FROM {selected_table} LIMIT {page_size} OFFSET {offset}")
+        # Build the SQL query
+        sql_query = f"SELECT {cols_str} FROM {selected_table}"
+        count_query = f"SELECT COUNT(*) FROM {selected_table}"
+        query_params = []
+        
+        # Add agreement_type filter for scrapes table
+        if selected_table == 'scrapes' and agreement_type_filter:
+            sql_query += " WHERE agreement_type = ?"
+            count_query += " WHERE agreement_type = ?"
+            query_params.append(agreement_type_filter)
+            
+        # Add pagination
+        sql_query += " LIMIT ? OFFSET ?"
+        query_params.extend([page_size, offset])
+        
+        # Get total row count (with filters applied)
+        if selected_table == 'scrapes' and agreement_type_filter:
+            sql_cursor.execute(count_query, [agreement_type_filter])
+        else:
+            sql_cursor.execute(count_query)
+        total_rows = sql_cursor.fetchone()[0]
+        
+        # Get table data with pagination and filters
+        sql_cursor.execute(sql_query, query_params)
         table_data = sql_cursor.fetchall()
         
         # Check if there are more rows
@@ -924,7 +965,8 @@ def sql_viewer():
                           page=page,
                           total_rows=total_rows,
                           has_more=has_more,
-                          total_pages=(total_rows // page_size) + (1 if total_rows % page_size > 0 else 0))
+                          total_pages=(total_rows // page_size) + (1 if total_rows % page_size > 0 else 0),
+                          agreement_type_filter=agreement_type_filter)
 
 @app.route("/api/process", methods=["POST"])
 def api_process():
@@ -1066,18 +1108,33 @@ def api_process():
             processing_time = time.time() - start_time if 'start_time' in locals() else 0
             time_str = f"{processing_time:.2f}s"
             
-            # Return error response
-            result = {
-                "success": False,
-                "domain": domain,
-                "agreement_type": agreement_type,
-                "url": url if 'url' in locals() else "Not found",
-                "error": error_message,
-                "processing_time": time_str,
-                "message": f"Failed: {error_message} - Not saved to database"
-            }
-            
-            return jsonify(result), 400
+            # Special handling for Cloudflare/CAPTCHA detection
+            if "Cloudflare or CAPTCHA protection detected" in error_message:
+                # Return specific error code and message for Cloudflare/CAPTCHA detection
+                result = {
+                    "success": False,
+                    "domain": domain,
+                    "agreement_type": agreement_type,
+                    "url": url if 'url' in locals() else "Not found",
+                    "error": "Cloudflare or CAPTCHA protection detected. Cannot process this site.",
+                    "error_details": error_message,
+                    "processing_time": time_str,
+                    "message": "Failed: Cloudflare or CAPTCHA protection detected - Not saved to database"
+                }
+                return jsonify(result), 403  # 403 Forbidden is appropriate for this case
+            else:
+                # Return error response for other errors
+                result = {
+                    "success": False,
+                    "domain": domain,
+                    "agreement_type": agreement_type,
+                    "url": url if 'url' in locals() else "Not found",
+                    "error": error_message,
+                    "processing_time": time_str,
+                    "message": f"Failed: {error_message} - Not saved to database"
+                }
+                
+                return jsonify(result), 400
             
     except Exception as e:
         # Handle any unexpected exceptions

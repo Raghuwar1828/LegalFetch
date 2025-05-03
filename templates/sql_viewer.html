@@ -252,7 +252,7 @@
       <a href="{{ url_for('index') }}" class="brand">Legal Fetch</a>
       <ul class="nav-links">
         {% if 'user_id' in session %}
-          <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+          <li><a href="{{ url_for('index') }}">Home</a></li>
           <li><a href="{{ url_for('sql_viewer') }}">SQL Viewer</a></li>
           <li><a href="{{ url_for('logout') }}">Logout</a></li>
         {% else %}
@@ -298,8 +298,10 @@
     <div class="pagination" style="display: flex; justify-content: space-between; margin: 20px 0;">
       <div>
         {% if page > 1 %}
-        <a href="{{ url_for('sql_viewer', table=selected_table, page=page-1, columns=selected_columns) }}" 
-           class="pagination-btn prev-btn">&laquo; Previous</a>
+        <a href="{{ url_for('sql_viewer', table=selected_table, page=1, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+           class="pagination-btn first-btn" style="margin-right: 10px;">&laquo; First</a>
+        <a href="{{ url_for('sql_viewer', table=selected_table, page=page-1, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+           class="pagination-btn prev-btn">Previous</a>
         {% endif %}
       </div>
       <div class="page-info">
@@ -307,10 +309,34 @@
       </div>
       <div>
         {% if has_more %}
-        <a href="{{ url_for('sql_viewer', table=selected_table, page=page+1, columns=selected_columns) }}" 
-           class="pagination-btn next-btn">Next &raquo;</a>
+        <a href="{{ url_for('sql_viewer', table=selected_table, page=page+1, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+           class="pagination-btn next-btn">Next</a>
+        <a href="{{ url_for('sql_viewer', table=selected_table, page=total_pages, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+           class="pagination-btn last-btn" style="margin-left: 10px;">Last &raquo;</a>
         {% endif %}
       </div>
+    </div>
+    {% endif %}
+    
+    <!-- Agreement Type Filter (only for scrapes table) -->
+    {% if selected_table == 'scrapes' %}
+    <div class="filter-controls" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+      <h3>Filter Results</h3>
+      <form method="get" action="{{ url_for('sql_viewer') }}" style="display: flex; align-items: center; gap: 15px;">
+        <input type="hidden" name="table" value="{{ selected_table }}">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <label for="agreement-type-filter">Agreement Type:</label>
+          <select id="agreement-type-filter" name="agreement_type" style="padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+            <option value="">All</option>
+            <option value="tos" {% if agreement_type_filter == 'tos' %}selected{% endif %}>Terms of Service (TOS)</option>
+            <option value="pp" {% if agreement_type_filter == 'pp' %}selected{% endif %}>Privacy Policy (PP)</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary">Apply Filter</button>
+        {% if agreement_type_filter %}
+        <a href="{{ url_for('sql_viewer', table=selected_table) }}" class="btn-secondary" style="text-decoration: none;">Clear Filter</a>
+        {% endif %}
+      </form>
     </div>
     {% endif %}
     
@@ -321,6 +347,9 @@
       <form method="get" action="{{ url_for('sql_viewer') }}" id="column-form" onsubmit="return validateColumnForm()">
         <input type="hidden" name="table" value="{{ selected_table }}">
         <input type="hidden" name="page" value="{{ page }}">
+        {% if agreement_type_filter %}
+        <input type="hidden" name="agreement_type" value="{{ agreement_type_filter }}">
+        {% endif %}
         
         <!-- Column checkboxes in the middle -->
         <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid #dee2e6; border-radius: 4px;">
@@ -400,7 +429,7 @@
       const tableCells = document.querySelectorAll('.data-table td');
       
       // Auto-refresh functionality
-      let refreshInterval = 5; // seconds
+      let refreshInterval = 10; // seconds
       let countdownTimer;
       let autoRefreshTimer;
       let currentCountdown = refreshInterval;
