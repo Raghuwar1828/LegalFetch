@@ -373,20 +373,20 @@ def calculate_text_metrics(tos_text, pp_text):
             
         # 1. TF-IDF Analysis with better preprocessing
         try:
-            # Create a small corpus for better TF-IDF calculation
+            # Create a mini-corpus for TF-IDF
             mini_corpus = [text]
-            if other_text:  # Add the other document if available
+            if other_text:
                 mini_corpus.append(other_text)
-                
+
             vectorizer = TfidfVectorizer(
                 stop_words='english',
                 max_features=1000,
-                ngram_range=(1, 2)  # Include bigrams
+                ngram_range=(1, 2)
             )
             tfidf_matrix = vectorizer.fit_transform(mini_corpus)
             feature_names = vectorizer.get_feature_names_out()
-            
-            # Get scores for the target document
+
+            # Get top TF-IDF scores for the target document
             doc_tfidf = tfidf_matrix[0].toarray()[0]
             top_indices = np.argsort(doc_tfidf)[::-1][:10]
             top_tfidf = [(feature_names[i], float(doc_tfidf[i])) for i in top_indices]
@@ -558,7 +558,7 @@ def index():
             except ValueError as e:
                 flash(f"Analysis failed for '{d}': {str(e)}", "danger")
                 continue
-            
+                
             # Calculate processing time
             processing_time = time.time() - start_time
             
@@ -591,8 +591,8 @@ def index():
                     ) VALUES (?,?,?,?,?)""",
                     (scrape_id, w, freq, tfidf_score, is_hap)
                 )
-            conn.commit()
-            
+                conn.commit()
+
             # Format processing time
             if processing_time < 1:
                 time_str = f"{processing_time*1000:.0f}ms"
@@ -601,7 +601,7 @@ def index():
             
             # Add result to display list
             result = {
-                "domain": d,
+                    "domain": d,
                 "agreement_type": agreement_type,
                 "url": url,
                 "text": text,

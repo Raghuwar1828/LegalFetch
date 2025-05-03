@@ -300,6 +300,7 @@
         padding: 0 8px;
         font-size: 0.9em;
         transition: width 0.3s ease;
+        width: var(--w);
     }
 
     /* Word Importance (TF-IDF) */
@@ -608,27 +609,27 @@
         </div>
       </div>
       
+      <!-- Word Frequency Section -->
+      <div class="frequency-section">
+        <h4>Word Frequency</h4>
+        <div class="word-freq-list">
+          {% for word, freq in r.text_metrics.word_frequency %}
+          <div class="word-freq-item">
+            <span class="word">{{ word }}</span>
+            <div class="freq-bar-container">
+              <div class="freq-bar" style="--w: {{ (freq / r.text_metrics.word_frequency[0][1] * 100)|round }}%">
+                <span class="freq-count">{{ freq }}</span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      
       <!-- Text Mining Metrics -->
       <div class="text-mining-section">
         <h4>Text Mining Analysis</h4>
         <div class="metrics-grid">
-          <!-- Word Frequency Section -->
-          <div class="metric-box full-width">
-            <h5>Most Common Words</h5>
-            <div class="word-freq-list">
-              {% for word, freq in r.text_metrics.word_frequency %}
-              <div class="word-freq-item">
-                <span class="word">{{ word }}</span>
-                <div class="freq-bar-container">
-                  <div class="freq-bar" style="width: {{ (freq / r.text_metrics.word_frequency[0][1] * 100)|round }}%;">
-                    <span class="freq-count">{{ freq }}</span>
-                  </div>
-                </div>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-
           <!-- Readability Metrics -->
           <div class="metric-box">
             <h5>Readability Analysis</h5>
