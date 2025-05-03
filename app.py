@@ -118,13 +118,114 @@ def find_policy_links(base_url):
         soup = BeautifulSoup(response.text, "html.parser")
         links = soup.find_all("a", href=True)
 
-        tos_link, pp_link = "", ""
+        # Enhanced patterns for Terms of Service matching
+        tos_patterns = [
+            "terms of service", "terms of use", "terms and conditions",
+            "terms & conditions", "user agreement", "service agreement",
+            "user terms", "legal terms", "legal agreement", "platform terms",
+            "website terms", "terms and policies", "platform agreement",
+            "site terms", "service terms", "software license", "user terms",
+            "license agreement", "terms agreement", "conditions of use", 
+            "condition of use", "terms of sale", "site agreement",
+            "legal notices", "legal information", "website agreement",
+            "user license", "tos", "tou", "eula"
+        ]
+        
+        # Enhanced patterns for Privacy Policy matching
+        pp_patterns = [
+            "privacy policy", "privacy statement", "privacy notice",
+            "data privacy", "data protection", "privacy protection",
+            "privacy practices", "privacy rights", "privacy",
+            "your privacy", "personal data", "personal information",
+            "data rights", "privacy settings", "data protection rights",
+            "right to access", "right to rectification", "right to erasure",
+            "right to be forgotten", "do not sell my data", "opt-out rights",
+            "ccpa rights", "gdpr rights", "data subject rights"
+        ]
+        
+        # Candidate links with scores
+        tos_candidates = []
+        pp_candidates = []
+        
         for link in links:
             href = link["href"].lower()
-            if 'terms' in href and not tos_link:
-                tos_link = get_full_url("https://" + base_url, href)
-            if 'privacy' in href and not pp_link:
-                pp_link = get_full_url("https://" + base_url, href)
+            text = link.get_text().lower().strip()
+            
+            # Skip empty, javascript, and hash links
+            if not href or href.startswith(("javascript:", "#", "mailto:", "tel:")):
+                continue
+                
+            # Score for TOS link
+            tos_score = 0
+            for pattern in tos_patterns:
+                if pattern in href:
+                    tos_score += 10
+                if pattern in text:
+                    tos_score += 15
+                    
+            # Special case boosts for TOS
+            if href == "/terms" or href == "/tos" or href == "/terms-of-service":
+                tos_score += 30
+            if text == "terms of service" or text == "terms of use":
+                tos_score += 30
+            
+            # Score for PP link
+            pp_score = 0
+            for pattern in pp_patterns:
+                if pattern in href:
+                    pp_score += 10
+                if pattern in text:
+                    pp_score += 15
+                    
+            # Special case boosts for PP
+            if href == "/privacy" or href == "/privacy-policy":
+                pp_score += 30
+            if text == "privacy policy" or text == "privacy":
+                pp_score += 30
+                
+            # Footer links get a bonus (often contain legal links)
+            is_footer_link = False
+            parent = link.parent
+            for _ in range(3):  # Check up to 3 levels of parents
+                if not parent:
+                    break
+                if parent.name == 'footer' or (parent.get('class') and 
+                                              any('footer' in cls.lower() for cls in parent.get('class'))):
+                    is_footer_link = True
+                    break
+                parent = parent.parent
+                
+            if is_footer_link:
+                tos_score += 15
+                pp_score += 15
+                
+            # Add to candidates if score is above threshold
+            if tos_score >= 10:
+                tos_candidates.append({
+                    "url": href,
+                    "score": tos_score,
+                    "text": text
+                })
+                
+            if pp_score >= 10:
+                pp_candidates.append({
+                    "url": href,
+                    "score": pp_score,
+                    "text": text
+                })
+        
+        # Sort candidates by score
+        tos_candidates.sort(key=lambda x: x["score"], reverse=True)
+        pp_candidates.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Get top candidates
+        tos_link = ""
+        if tos_candidates:
+            tos_link = get_full_url("https://" + base_url, tos_candidates[0]["url"])
+            
+        pp_link = ""
+        if pp_candidates:
+            pp_link = get_full_url("https://" + base_url, pp_candidates[0]["url"])
 
         return tos_link, pp_link
     except Exception as e:
