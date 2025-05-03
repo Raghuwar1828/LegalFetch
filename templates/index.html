@@ -635,114 +635,49 @@
         </div>
       </div>
       
-      <!-- Text Mining Metrics -->
+      <!-- Simplified Text Mining Metrics -->
       <div class="text-mining-section">
-        <h4>Text Mining Analysis</h4>
+        <h4>Text Mining Metrics</h4>
         <div class="metrics-grid">
-          <!-- Readability Metrics -->
           <div class="metric-box">
-            <h5>Readability Analysis</h5>
-            <div class="metric-value">
-              {{ r.text_metrics.readability.flesch_score|round(1) }}
-              <span class="metric-label">Flesch Reading Ease</span>
-              {% set score = r.text_metrics.readability.flesch_score %}
-              <span class="score-indicator 
-                {% if score > 70 %}score-good
-                {% elif score > 50 %}score-medium
-                {% else %}score-poor{% endif %}">
-                {% if score > 70 %}Easy to Read
-                {% elif score > 50 %}Moderate
-                {% else %}Complex{% endif %}
-              </span>
-            </div>
-            <div class="sub-metrics">
-              <div class="sub-metric">
-                <span class="sub-label">Grade Level</span>
-                <span class="sub-value">{{ r.text_metrics.readability.flesch_grade|round(1) }}</span>
-              </div>
-              <div class="sub-metric">
-                <span class="sub-label">Gunning Fog</span>
-                <span class="sub-value">{{ r.text_metrics.readability.gunning_fog|round(1) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Sentiment Analysis -->
-          <div class="metric-box">
-            <h5>Sentiment Analysis</h5>
-            <div class="metric-value">
-              {{ r.text_metrics.readability.sentiment_score|round(3) }}
-              <span class="metric-label">Polarity Score</span>
-              {% set sentiment = r.text_metrics.readability.sentiment_score %}
-              <span class="score-indicator 
-                {% if sentiment > 0.2 %}score-good
-                {% elif sentiment < -0.2 %}score-poor
-                {% else %}score-medium{% endif %}">
-                {% if sentiment > 0.2 %}Positive
-                {% elif sentiment < -0.2 %}Negative
-                {% else %}Neutral{% endif %}
-              </span>
-            </div>
-            <div class="sub-metrics">
-              <div class="sub-metric">
-                <span class="sub-label">Subjectivity</span>
-                <span class="sub-value">{{ r.text_metrics.readability.subjectivity|round(3) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Document Statistics -->
-          <div class="metric-box">
-            <h5>Document Statistics</h5>
-            <div class="sub-metrics">
-              <div class="sub-metric">
-                <span class="sub-label">Word Count</span>
-                <span class="sub-value">{{ r.text_metrics.document_stats.word_count }}</span>
-              </div>
-              <div class="sub-metric">
-                <span class="sub-label">Sentence Count</span>
-                <span class="sub-value">{{ r.text_metrics.document_stats.sentence_count }}</span>
-              </div>
-              <div class="sub-metric">
-                <span class="sub-label">Avg. Sentence Length</span>
-                <span class="sub-value">{{ r.text_metrics.document_stats.avg_sentence_length }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Hapax Legomena -->
-          <div class="metric-box">
-            <h5>Hapax Legomena</h5>
-            <div class="metric-value">
-              {{ (r.text_metrics.hapax.ratio * 100)|round(1) }}%
-              <span class="metric-label">Hapax Ratio</span>
-            </div>
-            <div class="sub-metrics">
-              <div class="sub-metric">
-                <span class="sub-label">Single-Use Words</span>
-                <span class="sub-value">{{ r.text_metrics.hapax.count }}</span>
-              </div>
-            </div>
+            <h5>Key Terms (Top 5 TF-IDF)</h5>
             <div class="terms-cloud">
-              {% for w in r.text_metrics.hapax.examples %}
-              <div class="term-chip">
-                <span class="term-word">{{ w }}</span>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-
-          <!-- Important Terms -->
-          <div class="metric-box">
-            <h5>Key Terms</h5>
-            <div class="terms-cloud">
-              {% for term, score in r.text_metrics.key_terms %}
+              {% for term, score in r.text_metrics.tfidf %}
               <div class="term-chip">
                 <span class="term-word">{{ term }}</span>
                 <span class="term-score">{{ score|round(3) }}</span>
               </div>
               {% endfor %}
             </div>
+          </div>
+          <div class="metric-box">
+            <h5>Readability Score</h5>
+            <div class="metric-value">{{ r.text_metrics.readability }}</div>
+          </div>
+          <div class="metric-box">
+            <h5>Sentiment Polarity</h5>
+            <div class="metric-value">{{ r.text_metrics.sentiment }}</div>
+          </div>
+          <div class="metric-box">
+            <h5>Document Length</h5>
+            <div class="sub-metrics">
+              <div class="sub-metric">
+                <span class="sub-label">Word Count</span>
+                <span class="sub-value">{{ r.text_metrics.word_count }}</span>
+              </div>
+              <div class="sub-metric">
+                <span class="sub-label">Sentence Count</span>
+                <span class="sub-value">{{ r.text_metrics.sentence_count }}</span>
+              </div>
+              <div class="sub-metric">
+                <span class="sub-label">Avg. Sentence Length</span>
+                <span class="sub-value">{{ r.text_metrics.avg_sentence_length }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="metric-box">
+            <h5>Hapax Legomena Ratio</h5>
+            <div class="metric-value">{{ (r.text_metrics.hapax_ratio * 100)|round(1) }}%</div>
           </div>
         </div>
       </div>

@@ -197,6 +197,53 @@
     #column-form {
       display: block !important;
     }
+    
+    /* Toggle Switch Styles */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;    /* smaller width for compact look */
+      height: 20px;   /* reduced height */
+      margin-right: 8px;  /* spacing to label */
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ddd;     /* lighter background */
+      transition: background-color .3s;
+      border-radius: 34px;
+      box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;   /* reduced knob size */
+      width: 16px;
+      left: 2px; bottom: 2px;
+      background-color: #fff;
+      transition: transform .3s;
+      border-radius: 50%;
+    }
+    .switch input:checked + .slider {
+      background-color: #2d4373;  /* active color */
+    }
+    .switch input:checked + .slider:before {
+      transform: translateX(20px);  /* match reduced width */
+    }
+    .toggle-label {
+      font-weight: 500;
+      color: #333;
+    }
+    /* Hover effect on switch */
+    .switch:hover .slider {
+      background-color: #bbb;
+    }
   </style>
 </head>
 <body>
@@ -231,13 +278,13 @@
             <option value="{{ table }}" {% if table == selected_table %}selected{% endif %}>{{ table }}</option>
           {% endfor %}
         </select>
-        <button type="submit">View Table</button>
-        
         <div class="refresh-controls">
           <div class="auto-refresh-toggle">
-            <label for="auto-refresh">
-              <input type="checkbox" id="auto-refresh"> Auto-refresh
+            <label class="switch">
+              <input type="checkbox" id="auto-refresh">
+              <span class="slider"></span>
             </label>
+            <span class="toggle-label">Auto-refresh</span>
             <span class="refresh-indicator" id="refresh-indicator"></span>
             <span class="refresh-countdown" id="refresh-countdown"></span>
           </div>

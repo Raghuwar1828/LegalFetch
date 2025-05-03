@@ -97,20 +97,6 @@ CREATE TABLE IF NOT EXISTS summary_cache (
 )
 """)
 
-# Create word frequencies table
-c.execute("""
-CREATE TABLE IF NOT EXISTS word_frequencies (
-    id INTEGER PRIMARY KEY,
-    scrape_id INTEGER,
-    word TEXT,
-    frequency INTEGER,
-    tf_idf_score REAL,
-    is_hapax BOOLEAN,
-    FOREIGN KEY (scrape_id) REFERENCES scrapes(id),
-    UNIQUE(scrape_id, word)
-)
-""")
-
 conn.commit()
 
 # --- HELPERS ---
@@ -351,10 +337,6 @@ def analyze_tos_pp(tos_text, pp_text):
     return raw_output, freq_tos, freq_pp, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
 
 def calculate_text_metrics(tos_text, pp_text):
-    """
-    Calculate comprehensive text mining metrics for legal documents.
-    Returns a dictionary containing all metrics.
-    """
     metrics = {}
     
     def analyze_single_document(text, doc_type, other_text=None):
@@ -446,6 +428,52 @@ def calculate_text_metrics(tos_text, pp_text):
     metrics['pp'] = analyze_single_document(pp_text, 'pp', tos_text)
     
     return metrics
+
+# --- Simplified Text Mining Metrics ---
+def calculate_simple_metrics(text):
+    """
+    Compute five lightweight metrics for a single document:
+    TF-IDF top terms, Flesch score, sentiment polarity,
+    document length stats, and Hapax Legomena ratio.
+    """
+    if not text:
+        return {'tfidf': [], 'readability': 0, 'sentiment': 0,
+                'word_count': 0, 'sentence_count': 0,
+                'avg_sentence_length': 0, 'hapax_ratio': 0}
+    # TF-IDF Top 5 terms
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=10)
+    tfidf_matrix = vectorizer.fit_transform([text])
+    features = vectorizer.get_feature_names_out()
+    scores = tfidf_matrix.toarray()[0]
+    top_idx = np.argsort(scores)[::-1][:5]
+    top_tfidf = [(features[i], float(scores[i])) for i in top_idx]
+    # Readability
+    flesch = textstat.flesch_reading_ease(text)
+    # Sentiment
+    blob = TextBlob(text)
+    polarity = round(blob.sentiment.polarity, 3)
+    # Document length metrics
+    words = word_tokenize(text)
+    sentences = sent_tokenize(text)
+    clean_words = [w for w in words if w.isalnum()]
+    wcount = len(clean_words)
+    scount = len(sentences)
+    avg_len = round(wcount/scount, 2) if scount else 0
+    # Hapax Legomena ratio
+    wc = Counter(clean_words)
+    hapax_count = len([w for w,c in wc.items() if c==1])
+    hapax_ratio = round(hapax_count/wcount, 4) if wcount else 0
+    return {
+        'tfidf': top_tfidf,
+        'readability': round(flesch, 1),
+        'sentiment': polarity,
+        'word_count': wcount,
+        'sentence_count': scount,
+        'avg_sentence_length': avg_len,
+        'hapax_ratio': hapax_ratio,
+        # Top 10 word frequencies (filtered tokens)
+        'word_frequency': Counter(clean_tokens(text)).most_common(10)
+    }
 
 # --- ROUTES ---
 @app.route("/register", methods=["GET","POST"])
@@ -556,47 +584,15 @@ def index():
             else:  # pp
                 raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text)
             
-            # Calculate text mining metrics
-            try:
-                metrics = calculate_text_metrics(text if agreement_type == "tos" else "", 
-                                              text if agreement_type == "pp" else "")
-                
-                # Get the metrics for the current document type
-                doc_metrics = metrics['tos'] if agreement_type == "tos" else metrics['pp']
-                
-                # Prepare metrics dictionary with enhanced structure
-                text_metrics = {
-                    "document_stats": {
-                        "word_count": doc_metrics['doc_stats']['words'],
-                        "sentence_count": doc_metrics['doc_stats']['sentences'],
-                        "avg_sentence_length": doc_metrics['doc_stats']['avg_length']
-                    },
-                    "hapax": {
-                        "ratio": doc_metrics['hapax']['ratio'],
-                        "count": doc_metrics['hapax']['count'],
-                        "examples": doc_metrics['hapax']['examples']
-                    },
-                    "readability": {
-                        "flesch_score": doc_metrics['readability']['flesch_ease'],
-                        "flesch_grade": doc_metrics['readability']['flesch_grade'],
-                        "gunning_fog": doc_metrics['readability']['gunning_fog'],
-                        "sentiment_score": doc_metrics['sentiment']['polarity'],
-                        "subjectivity": doc_metrics['sentiment']['subjectivity']
-                    },
-                    "key_terms": doc_metrics['tfidf'][:5],
-                    "word_frequency": Counter(clean_tokens(text)).most_common(10)
-                }
-                
-            except ValueError as e:
-                flash(f"Analysis failed for '{d}': {str(e)}", "danger")
-                continue
-                
+            # Calculate simplified text mining metrics
+            text_metrics = calculate_simple_metrics(text)
+            
             # Calculate processing time
             processing_time = time.time() - start_time
             
             # Save to database
             c.execute(
-                """INSERT INTO scrapes (
+                """INSERT OR IGNORE INTO scrapes (
                     domain, agreement_type, url, text, summary_100, summary_25,
                     text_metrics
                 ) VALUES (?,?,?,?,?,?,?)""",
@@ -608,23 +604,6 @@ def index():
             scrape_id = c.lastrowid
             conn.commit()
             
-            # Save word frequencies separately
-            word_counts = Counter(clean_tokens(text))
-            for w, freq in word_counts.items():
-                tfidf_score = 0.0
-                for term, score in text_metrics['key_terms']:
-                    if term == w:
-                        tfidf_score = score
-                        break
-                is_hap = (freq == 1)
-                c.execute(
-                    """INSERT OR IGNORE INTO word_frequencies (
-                        scrape_id, word, frequency, tf_idf_score, is_hapax
-                    ) VALUES (?,?,?,?,?)""",
-                    (scrape_id, w, freq, tfidf_score, is_hap)
-                )
-                conn.commit()
-
             # Format processing time
             if processing_time < 1:
                 time_str = f"{processing_time*1000:.0f}ms"
