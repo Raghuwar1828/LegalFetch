@@ -173,7 +173,7 @@ def save_progress(agreement_type, rank=None, successes=None, tos_rank=None, tos_
     with open(PROGRESS_FILE, 'w') as f:
         json.dump(progress, f)
 
-def display_progress_stats(agreement_type, current_rank, success_target, successes=None, tos_successes=None, pp_successes=None):
+def display_progress_stats(agreement_type, current_rank, success_target, successes=None, tos_successes=None, pp_successes=None, current_focus=None):
     """Display detailed progress statistics"""
     print("\n" + "="*50)
     print(f"PROGRESS REPORT - {agreement_type.upper()}")
@@ -194,6 +194,7 @@ def display_progress_stats(agreement_type, current_rank, success_target, success
         
         print(f"Current rank: {current_rank}")
         print(f"TOS rank: {tos_current_rank}, PP rank: {pp_current_rank}")
+        print(f"CURRENT FOCUS: {current_focus.upper() if current_focus else 'TOS'}")
         print(f"TOS successful scrapes: {tos_current_successes}")
         print(f"PP successful scrapes: {pp_current_successes}")
         print(f"TOS remaining to reach target: {tos_remaining}")
@@ -220,6 +221,10 @@ def process_domains(agreement_type, start_rank, success_target):
             pp_stats = progress_stats.get('pp', {})
             tos_successes = tos_stats.get('successes', 0) 
             pp_successes = pp_stats.get('successes', 0)
+            
+            # Determine which document type to focus on
+            current_focus = "tos" if tos_successes < success_target else "pp"
+            print(f"\nFocusing on {current_focus.upper()} first until target of {success_target} is reached.")
         else:
             successes = progress_stats.get('successes', 0)
         
@@ -234,22 +239,36 @@ def process_domains(agreement_type, start_rank, success_target):
                     domain = row['Domain']
                     
                     if agreement_type == "both":
-                        # Process both TOS and PP
-                        tos_success, pp_success = process_domain(domain, agreement_type)
+                        # Check if we need to switch focus
+                        if current_focus == "tos" and tos_successes >= success_target:
+                            current_focus = "pp"
+                            print(f"\n🎉 TOS TARGET REACHED! Switching focus to PP. Need {success_target - pp_successes} more successes.")
+                        elif current_focus == "pp" and pp_successes >= success_target:
+                            print(f"\n🎉 SUCCESS TARGET REACHED FOR BOTH! TOS: {tos_successes}, PP: {pp_successes} successful scrapes completed.")
+                            return
+                        
+                        # Process focused document type only
+                        success = process_single_agreement(domain, current_focus)
                         
                         # Update success counts
-                        if tos_success:
-                            tos_successes += 1
-                        if pp_success:
-                            pp_successes += 1
+                        if success:
+                            if current_focus == "tos":
+                                tos_successes += 1
+                            else:
+                                pp_successes += 1
                         
                         # Save progress after each domain
-                        save_progress(agreement_type, tos_rank=current_rank, tos_successes=tos_successes, 
-                                     pp_rank=current_rank, pp_successes=pp_successes)
+                        if current_focus == "tos":
+                            save_progress(agreement_type, tos_rank=current_rank, tos_successes=tos_successes,
+                                         pp_rank=pp_stats.get('rank', 0), pp_successes=pp_successes)
+                        else:
+                            save_progress(agreement_type, tos_rank=tos_stats.get('rank', 0), tos_successes=tos_successes,
+                                         pp_rank=current_rank, pp_successes=pp_successes)
                         
                         # Display current progress stats
                         display_progress_stats(agreement_type, current_rank, success_target, 
-                                             tos_successes=tos_successes, pp_successes=pp_successes)
+                                             tos_successes=tos_successes, pp_successes=pp_successes,
+                                             current_focus=current_focus)
                         
                         # Check if we've reached both success targets
                         if tos_successes >= success_target and pp_successes >= success_target:
