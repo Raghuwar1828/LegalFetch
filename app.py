@@ -214,80 +214,106 @@ def summarize_tos_pp(tos_text, pp_text, company_name=None):
     if not tos_text and not pp_text:
         return "", "No terms of service found", "No TOS found", "No privacy policy found", "No PP found"
     
-    try:
-        # Check if API key exists
-        if not gemini_api_key:
-            raise ValueError("GEMINI_API_KEY not set in environment variables")
-            
-        # Use the improved prompt from the create_improved_summary_prompt function
-        if tos_text:
-            prompt = create_improved_summary_prompt(tos_text, "tos", company_name)
-        elif pp_text:
-            prompt = create_improved_summary_prompt(pp_text, "pp", company_name)
-        else:
-            raise ValueError("No text provided for summarization")
-            
-        # Call Gemini API
-        full_txt = call_gemini_api(prompt)
-        if not full_txt:
-            raise ValueError("Empty response from Gemini API")
-      
-        # Split into clean lines
-        lines = [line.strip() for line in full_txt.splitlines() if line.strip()]
-        
-        # Extract summaries using the new format from the improved prompt
-        tos_summary_100 = ""
-        tos_summary_25 = ""
-        pp_summary_100 = ""
-        pp_summary_25 = ""
-        
-        # Extract the 100-word summary and one-sentence summary
-        hundred_word_start = full_txt.find("100-WORD SUMMARY")
-        one_sentence_start = full_txt.find("ONE-SENTENCE SUMMARY")
-        if hundred_word_start >= 0 and one_sentence_start >= 0:
-            # Extract the section between the headers, skipping the header line
-            hundred_word_text = full_txt[hundred_word_start:one_sentence_start].strip()
-            hundred_word_lines = hundred_word_text.split('\n')
-            hundred_word_summary = '\n'.join(hundred_word_lines[1:]).strip()
-            
-            # Extract one-sentence summary
-            one_sentence_text = full_txt[one_sentence_start:].strip()
-            one_sentence_lines = one_sentence_text.split('\n')
-            one_sentence_summary = '\n'.join(one_sentence_lines[1:]).strip()
-            
-            # Find any requirements section and remove it (usually appears after a blank line)
-            if "Requirements:" in hundred_word_summary:
-                hundred_word_summary = hundred_word_summary.split("Requirements:")[0].strip()
-            if "Requirements:" in one_sentence_summary:
-                one_sentence_summary = one_sentence_summary.split("Requirements:")[0].strip()
+    max_retries = 2  # Try up to 2 more times after the initial attempt
+    retry_count = 0
+    
+    while retry_count <= max_retries:
+        try:
+            # Check if API key exists
+            if not gemini_api_key:
+                raise ValueError("GEMINI_API_KEY not set in environment variables")
                 
-            # Clean up the text (remove markdown formatting, extra spaces)
-            hundred_word_summary = re.sub(r'[*"`\']+', '', hundred_word_summary)
-            one_sentence_summary = re.sub(r'[*"`\']+', '', one_sentence_summary)
-            
-            # Assign to the appropriate variables based on the document type
+            # Use the improved prompt from the create_improved_summary_prompt function
             if tos_text:
-                tos_summary_100 = hundred_word_summary
-                tos_summary_25 = one_sentence_summary
+                prompt = create_improved_summary_prompt(tos_text, "tos", company_name)
             elif pp_text:
-                pp_summary_100 = hundred_word_summary
-                pp_summary_25 = one_sentence_summary
-
-        # Cache the results
-        c.execute("""
-            INSERT INTO summary_cache 
-            (tos_hash, pp_hash, raw_text, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (tos_hash, pp_hash, full_txt, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25))
-        
-        conn.commit()
-        
-        return full_txt, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
-        
-    except Exception as e:
-        print(f"Error in summarization: {e}")
-        # No fallback methods - just return empty values
-        return "", f"Error: {str(e)}", f"Error: {str(e)[:50]}", f"Error: {str(e)}", f"Error: {str(e)[:50]}"
+                prompt = create_improved_summary_prompt(pp_text, "pp", company_name)
+            else:
+                raise ValueError("No text provided for summarization")
+                
+            # Call Gemini API
+            full_txt = call_gemini_api(prompt)
+            if not full_txt:
+                raise ValueError("Empty response from Gemini API")
+          
+            # Split into clean lines
+            lines = [line.strip() for line in full_txt.splitlines() if line.strip()]
+            
+            # Extract summaries using the new format from the improved prompt
+            tos_summary_100 = ""
+            tos_summary_25 = ""
+            pp_summary_100 = ""
+            pp_summary_25 = ""
+            
+            # Extract the 100-word summary and one-sentence summary
+            hundred_word_start = full_txt.find("100-WORD SUMMARY")
+            one_sentence_start = full_txt.find("ONE-SENTENCE SUMMARY")
+            if hundred_word_start >= 0 and one_sentence_start >= 0:
+                # Extract the section between the headers, skipping the header line
+                hundred_word_text = full_txt[hundred_word_start:one_sentence_start].strip()
+                hundred_word_lines = hundred_word_text.split('\n')
+                hundred_word_summary = '\n'.join(hundred_word_lines[1:]).strip()
+                
+                # Extract one-sentence summary
+                one_sentence_text = full_txt[one_sentence_start:].strip()
+                one_sentence_lines = one_sentence_text.split('\n')
+                one_sentence_summary = '\n'.join(one_sentence_lines[1:]).strip()
+                
+                # Find any requirements section and remove it (usually appears after a blank line)
+                if "Requirements:" in hundred_word_summary:
+                    hundred_word_summary = hundred_word_summary.split("Requirements:")[0].strip()
+                if "Requirements:" in one_sentence_summary:
+                    one_sentence_summary = one_sentence_summary.split("Requirements:")[0].strip()
+                    
+                # Clean up the text (remove markdown formatting, extra spaces)
+                hundred_word_summary = re.sub(r'[*"`\']+', '', hundred_word_summary)
+                one_sentence_summary = re.sub(r'[*"`\']+', '', one_sentence_summary)
+                
+                # Assign to the appropriate variables based on the document type
+                if tos_text:
+                    tos_summary_100 = hundred_word_summary
+                    tos_summary_25 = one_sentence_summary
+                elif pp_text:
+                    pp_summary_100 = hundred_word_summary
+                    pp_summary_25 = one_sentence_summary
+            
+            # Check if any required summary is empty
+            is_tos_empty = tos_text and (not tos_summary_100 or not tos_summary_25)
+            is_pp_empty = pp_text and (not pp_summary_100 or not pp_summary_25)
+            
+            if is_tos_empty or is_pp_empty:
+                # If we still have retries left, try again
+                if retry_count < max_retries:
+                    retry_count += 1
+                    print(f"Empty summary detected, retrying ({retry_count}/{max_retries})...")
+                    time.sleep(1)  # Add a small delay before retrying
+                    continue
+                else:
+                    # We've exhausted all retries and still have empty summaries
+                    empty_summary_type = "TOS" if is_tos_empty else "PP"
+                    raise ValueError(f"Failed to generate {empty_summary_type} summary after multiple attempts")
+            
+            # If we got here, summaries are not empty, so we can cache and return the results
+            c.execute("""
+                INSERT INTO summary_cache 
+                (tos_hash, pp_hash, raw_text, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (tos_hash, pp_hash, full_txt, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25))
+            
+            conn.commit()
+            
+            return full_txt, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
+            
+        except Exception as e:
+            if retry_count < max_retries:
+                retry_count += 1
+                print(f"Error in summarization, retrying ({retry_count}/{max_retries}): {e}")
+                time.sleep(1)  # Add a small delay before retrying
+                continue
+            else:
+                print(f"Error in summarization after {retry_count} retries: {e}")
+                # No fallback methods - just return empty values with error
+                return "", f"Error: {str(e)}", f"Error: {str(e)[:50]}", f"Error: {str(e)}", f"Error: {str(e)[:50]}"
 
 def analyze_tos_pp(tos_text, pp_text, company_name=None):
     # clean & tokens

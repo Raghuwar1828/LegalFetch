@@ -15,6 +15,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -26,7 +27,6 @@ lib64/
 parts/
 sdist/
 var/
-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -35,4 +35,18 @@ wheels/
 .idea/
 .vscode/
 *.swp
-*.swo 
+*.swo
+
+# Logs
+*.log
+
+# Environment variables
+.env
+
+# Majestic Million data file and progress
+majestic_million.csv
+scraper_progress.json
+
+# OS specific
+.DS_Store
+Thumbs.db 
