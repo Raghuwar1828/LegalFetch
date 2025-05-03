@@ -154,7 +154,7 @@ def clean_tokens(text):
     t = re.sub(r'[^a-z\s]', '', text.lower())
     return [w for w in t.split() if w and w not in stops]
 
-def summarize_tos_pp(tos_text, pp_text):
+def summarize_tos_pp(tos_text, pp_text, company_name=None):
     # First check if we have a cached result for this exact content
     tos_hash = hash(tos_text[:1000] if tos_text else "")  # Use first 1000 chars as hash key
     pp_hash = hash(pp_text[:1000] if pp_text else "")
@@ -174,35 +174,19 @@ def summarize_tos_pp(tos_text, pp_text):
     if not tos_text and not pp_text:
         return "", "No terms of service found", "No TOS found", "No privacy policy found", "No PP found"
     
-    prompt = (
-        "You are a legal document summarizer. Generate clear, accurate, and meaningful summaries of legal documents in a specific format.\n\n"
-        "Instructions:\n"
-        "1. Carefully analyze the provided Terms of Service (TOS) and Privacy Policy (PP) texts\n"
-        "2. Create summaries that include direct quotes from the document\n"
-        "3. Use the exact format shown below for each summary\n"
-        "4. Focus on the most important legal implications for users\n\n"
-        
-        "TOS detailed summary (90-110 words): Start with 'The Terms of Service govern the relationship between users and the service provider. " 
-        "Based on the document's initial section: \"[INSERT DIRECT QUOTE FROM DOCUMENT HERE]\" This legal agreement typically covers [KEY ASPECTS BASED ON ANALYSIS].' " 
-        "Include an actual quote from the document between the quotation marks.\n\n"
-        
-        "TOS short summary (15-35 words): Create a concise summary focusing on the most critical user obligations and rights.\n\n"
-        
-        "PP detailed summary (90-110 words): Start with 'The Privacy Policy explains how the service handles user data. "
-        "Based on the document's initial section: \"[INSERT DIRECT QUOTE FROM DOCUMENT HERE]\" This policy covers [KEY ASPECTS BASED ON ANALYSIS].' "
-        "Include an actual quote from the document between the quotation marks.\n\n"
-        
-        "PP short summary (15-35 words): Create a concise summary focusing on data collection and privacy implications.\n\n"
-        
-        f"TOS Text: {tos_text[:5000]}\n\nPP Text: {pp_text[:5000]}"
-    )
-
     try:
         # Check if API key exists
         if not openai_api_key:
             raise ValueError("OPENAI_API_KEY not set in environment variables")
             
-        # Use a non-streaming approach first as fallback
+        # Use the improved prompt from the create_improved_summary_prompt function
+        if tos_text:
+            prompt = create_improved_summary_prompt(tos_text, "tos", company_name)
+        elif pp_text:
+            prompt = create_improved_summary_prompt(pp_text, "pp", company_name)
+        else:
+            raise ValueError("No text provided for summarization")
+            
         try:
             # Try non-streaming first for reliability
             resp = client.chat.completions.create(
@@ -240,44 +224,43 @@ def summarize_tos_pp(tos_text, pp_text):
         # Split into clean lines
         lines = [line.strip() for line in full_txt.splitlines() if line.strip()]
         
-        # Extract summaries
+        # Extract summaries using the new format from the improved prompt
         tos_summary_100 = ""
         tos_summary_25 = ""
         pp_summary_100 = ""
         pp_summary_25 = ""
         
-        for idx, line in enumerate(lines):
-            low = line.lower()
+        # Extract the 100-word summary and one-sentence summary
+        hundred_word_start = full_txt.find("100-WORD SUMMARY")
+        one_sentence_start = full_txt.find("ONE-SENTENCE SUMMARY")
+        if hundred_word_start >= 0 and one_sentence_start >= 0:
+            # Extract the section between the headers, skipping the header line
+            hundred_word_text = full_txt[hundred_word_start:one_sentence_start].strip()
+            hundred_word_lines = hundred_word_text.split('\n')
+            hundred_word_summary = '\n'.join(hundred_word_lines[1:]).strip()
             
-            # TOS summaries
-            if "tos detailed summary" in low or "tos 100 word summary" in low:
-                parts = line.split(":", 1)
-                if len(parts) > 1:
-                    tos_summary_100 = parts[1].strip()
-                elif idx+1 < len(lines):
-                    tos_summary_100 = lines[idx+1].lstrip("- ").strip()
-                    
-            if "tos short summary" in low or "tos 25 word summary" in low:
-                parts = line.split(":", 1)
-                if len(parts) > 1:
-                    tos_summary_25 = parts[1].strip()
-                elif idx+1 < len(lines):
-                    tos_summary_25 = lines[idx+1].lstrip("- ").strip()
+            # Extract one-sentence summary
+            one_sentence_text = full_txt[one_sentence_start:].strip()
+            one_sentence_lines = one_sentence_text.split('\n')
+            one_sentence_summary = '\n'.join(one_sentence_lines[1:]).strip()
             
-            # PP summaries        
-            if "pp detailed summary" in low or "pp 100 word summary" in low:
-                parts = line.split(":", 1)
-                if len(parts) > 1:
-                    pp_summary_100 = parts[1].strip()
-                elif idx+1 < len(lines):
-                    pp_summary_100 = lines[idx+1].lstrip("- ").strip()
-                    
-            if "pp short summary" in low or "pp 25 word summary" in low:
-                parts = line.split(":", 1)
-                if len(parts) > 1:
-                    pp_summary_25 = parts[1].strip()
-                elif idx+1 < len(lines):
-                    pp_summary_25 = lines[idx+1].lstrip("- ").strip()
+            # Find any requirements section and remove it (usually appears after a blank line)
+            if "Requirements:" in hundred_word_summary:
+                hundred_word_summary = hundred_word_summary.split("Requirements:")[0].strip()
+            if "Requirements:" in one_sentence_summary:
+                one_sentence_summary = one_sentence_summary.split("Requirements:")[0].strip()
+                
+            # Clean up the text (remove markdown formatting, extra spaces)
+            hundred_word_summary = re.sub(r'[*"`\']+', '', hundred_word_summary)
+            one_sentence_summary = re.sub(r'[*"`\']+', '', one_sentence_summary)
+            
+            # Assign to the appropriate variables based on the document type
+            if tos_text:
+                tos_summary_100 = hundred_word_summary
+                tos_summary_25 = one_sentence_summary
+            elif pp_text:
+                pp_summary_100 = hundred_word_summary
+                pp_summary_25 = one_sentence_summary
 
         # Cache the results
         c.execute("""
@@ -300,49 +283,57 @@ def summarize_tos_pp(tos_text, pp_text):
                 tos_sentences = sent_tokenize(tos_text)[:8]
                 first_paragraph = " ".join(tos_sentences[:3])[:400]
                 
+                company_prefix = f"{company_name}'s " if company_name else ""
+                
                 tos_summary_100 = (
-                    "The Terms of Service govern the relationship between users and the service provider. "
+                    f"{company_prefix}Terms of Service govern the relationship between users and the service provider. "
                     "Based on the document's initial section: \"" + first_paragraph + "...\" "
                     "This legal agreement typically covers usage rights, content policies, account requirements, and liability limitations."
                 )
                 
-                tos_summary_25 = "Terms outline usage rules, user obligations, and service provider rights regarding content and account access."
+                tos_summary_25 = f"{company_prefix}Terms outline usage rules, user obligations, and service provider rights regarding content and account access."
             except:
-                tos_summary_100 = "The Terms of Service establish the legal agreement between users and the service provider. They typically cover acceptable use policies, intellectual property rights, account termination conditions, and liability limitations."
-                tos_summary_25 = "Terms outline user obligations and service provider rights regarding platform usage."
+                company_prefix = f"{company_name}'s " if company_name else ""
+                tos_summary_100 = f"{company_prefix}Terms of Service establish the legal agreement between users and the service provider. They typically cover acceptable use policies, intellectual property rights, account termination conditions, and liability limitations."
+                tos_summary_25 = f"{company_prefix}Terms outline user obligations and service provider rights regarding platform usage."
         else:
-            tos_summary_100 = "No terms of service document was found for this website."
-            tos_summary_25 = "No Terms of Service document found."
+            company_reference = f" for {company_name}" if company_name else ""
+            tos_summary_100 = f"No terms of service document was found{company_reference}."
+            tos_summary_25 = f"No Terms of Service document found{company_reference}."
             
         if pp_text:
             try:
                 pp_sentences = sent_tokenize(pp_text)[:8]
                 first_paragraph = " ".join(pp_sentences[:3])[:400]
                 
+                company_prefix = f"{company_name}'s " if company_name else ""
+                
                 pp_summary_100 = (
-                    "The Privacy Policy explains how the service handles user data. "
+                    f"{company_prefix}Privacy Policy explains how the service handles user data. "
                     "Based on the document's initial section: \"" + first_paragraph + "...\" "
                     "This policy typically details what information is collected, how it's used, third-party sharing practices, and user privacy controls."
                 )
                 
-                pp_summary_25 = "Policy describes data collection, usage, sharing practices, and user privacy options."
+                pp_summary_25 = f"{company_prefix}Policy describes data collection, usage, sharing practices, and user privacy options."
             except:
-                pp_summary_100 = "The Privacy Policy outlines how user data is collected, processed, and shared."
-                pp_summary_25 = "Policy explains data collection, usage, sharing practices, and privacy controls."
+                company_prefix = f"{company_name}'s " if company_name else ""
+                pp_summary_100 = f"{company_prefix}Privacy Policy outlines how user data is collected, processed, and shared."
+                pp_summary_25 = f"{company_prefix}Policy explains data collection, usage, sharing practices, and privacy controls."
         else:
-            pp_summary_100 = "No privacy policy document was found for this website."
-            pp_summary_25 = "No Privacy Policy document found."
+            company_reference = f" for {company_name}" if company_name else ""
+            pp_summary_100 = f"No privacy policy document was found{company_reference}."
+            pp_summary_25 = f"No Privacy Policy document found{company_reference}."
             
         return "", tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
 
-def analyze_tos_pp(tos_text, pp_text):
+def analyze_tos_pp(tos_text, pp_text, company_name=None):
     # clean & tokens
     tok_tos = clean_tokens(tos_text)
     tok_pp  = clean_tokens(pp_text)
     freq_tos = Counter(tok_tos).most_common(10)
     freq_pp  = Counter(tok_pp).most_common(10)
 
-    raw_output, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 = summarize_tos_pp(tos_text, pp_text)
+    raw_output, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25 = summarize_tos_pp(tos_text, pp_text, company_name)
     return raw_output, freq_tos, freq_pp, tos_summary_100, tos_summary_25, pp_summary_100, pp_summary_25
 
 def calculate_text_metrics(tos_text, pp_text):
@@ -484,6 +475,93 @@ def calculate_simple_metrics(text):
         'word_frequency': Counter(clean_tokens(text)).most_common(10)
     }
 
+def extract_company_name(domain):
+    """
+    Extract a company name from a domain URL
+    """
+    # Remove common TLDs and subdomains
+    domain = domain.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+    
+    # Extract the main domain name (before the TLD)
+    parts = domain.split('.')
+    if len(parts) > 0:
+        company = parts[0]
+        # Capitalize the first letter of each word
+        company = ' '.join(word.capitalize() for word in company.split('-'))
+        # Remove common URL indicators
+        return company
+    return domain
+
+def create_improved_summary_prompt(text, document_type="tos", company_name=None):
+    """
+    Creates an improved prompt for generating text summaries using AI models.
+    Based on production-grade prompt engineering techniques.
+    
+    Args:
+        text: The document text to summarize
+        document_type: 'tos' or 'pp' or other document type
+        company_name: Optional name of company for more specific prompt
+        
+    Returns:
+        A formatted prompt string for AI summarization
+    """
+    # Map document type to full name
+    if document_type == "pp":
+        doc_type_full = "Privacy Policy"
+    elif document_type == "tos":
+        doc_type_full = "Terms of Service"
+    else:
+        # Default to using the original value
+        doc_type_full = document_type
+    
+    # Include company name if available
+    company_reference = ""
+    company_start = ""
+    if company_name:
+        company_reference = f" for {company_name}"
+        company_start = f"{company_name}'s "
+    
+    # Construct the prompt
+    prompt = f"""100-WORD SUMMARY
+
+Write a concise, factual 100-word summary of the {doc_type_full}{company_reference}. Focus on the company policies and practices without referencing external services, other companies, or general industry practices.
+
+Requirements:
+- Start with "{company_start}{doc_type_full}"
+- Exactly 100 words (±10)
+- Single paragraph
+- Objective, factual tone
+- No personal pronouns (I, we, you)
+- No meta-references (e.g., "this document", "this text" ,"this policy")
+- No conditional language (e.g., "may", "might", "could")
+- No links or external references
+
+Provide a direct, factual, and company-specific summary.
+
+
+ONE-SENTENCE SUMMARY
+
+Write a single sentence (maximum 40 words) summarizing the most important aspect of the {doc_type_full}{company_reference}. Focus on the company policies and practices without referencing external services, other companies, or general industry practices.
+
+Requirements:
+- Start with "{company_start}{doc_type_full}"
+- One clear, direct sentence
+- Maximum 40 words
+- Objective, factual tone
+- No personal pronouns (I, we, you)
+- No meta-references (e.g., "this document", "this text")
+- No conditional language (e.g., "may", "might", "could")
+- No links or external references
+
+
+Here is the document content:
+
+{text}"""
+    
+    return prompt
+
 # --- ROUTES ---
 @app.route("/register", methods=["GET","POST"])
 def register():
@@ -545,8 +623,28 @@ def index():
                 c.execute("SELECT * FROM scrapes WHERE id = ?", (existing_record[0],))
                 record = c.fetchone()
                 
+                # Extract company name and prefix summaries
+                company_name = extract_company_name(d)
+                company_prefix = f"{company_name}'s " if company_name else ""
+                
                 # Format the result to display
                 text_metrics = eval(record[7])  # Convert the string back to a dictionary
+                
+                # Get the summaries and add company name if not already present
+                summary_100 = record[5]
+                summary_25 = record[6]
+                
+                # Add company prefix if not already present
+                if summary_100 and not summary_100.startswith(company_prefix):
+                    # Remove "The " from the beginning if present
+                    if summary_100.startswith("The "):
+                        summary_100 = summary_100[4:]
+                    summary_100 = company_prefix + summary_100
+                    
+                if summary_25 and not summary_25.startswith(company_prefix):
+                    if summary_25.startswith("The "):
+                        summary_25 = summary_25[4:]
+                    summary_25 = company_prefix + summary_25
                 
                 # Calculate processing time (minimal since we're just retrieving)
                 processing_time = time.time() - start_time
@@ -558,8 +656,8 @@ def index():
                     "agreement_type": record[2],
                     "url": record[3],
                     "text": record[4],
-                    "summary_100": record[5],
-                    "summary_25": record[6],
+                    "summary_100": summary_100,
+                    "summary_25": summary_25,
                     "text_metrics": text_metrics,
                     "processing_time": time_str,
                     "note": "Retrieved from database (already exists)"
@@ -587,11 +685,14 @@ def index():
                 flash(f"No content found at {url}", "danger")
                 continue
             
+            # Extract company name from domain
+            company_name = extract_company_name(d)
+                
             # Calculate summaries based on agreement type
             if agreement_type == "tos":
-                raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "")
+                raw_output, summary_100, summary_25, _, _ = summarize_tos_pp(text, "", company_name)
             else:  # pp
-                raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text)
+                raw_output, _, _, summary_100, summary_25 = summarize_tos_pp("", text, company_name)
             
             # Calculate simplified text mining metrics
             text_metrics = calculate_simple_metrics(text)
