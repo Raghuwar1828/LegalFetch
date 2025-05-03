@@ -567,11 +567,11 @@
         <p class="select-label">Select document type:</p>
         <div class="radio-group">
           <label class="radio-option">
-            <input type="radio" name="agreement_type" value="tos" checked> 
+            <input type="radio" name="agreement_type" value="tos" {% if selected_type == 'tos' %}checked{% endif %}> 
             <span>Terms of Service</span>
           </label>
           <label class="radio-option">
-            <input type="radio" name="agreement_type" value="pp"> 
+            <input type="radio" name="agreement_type" value="pp" {% if selected_type == 'pp' %}checked{% endif %}> 
             <span>Privacy Policy</span>
           </label>
         </div>

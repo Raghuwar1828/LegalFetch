@@ -65,12 +65,7 @@ headers = {
 conn = sqlite3.connect("app.db", check_same_thread=False)
 c = conn.cursor()
 
-# Drop existing tables if they exist
-c.execute("DROP TABLE IF EXISTS scrapes")
-c.execute("DROP TABLE IF EXISTS summary_cache")
-c.execute("DROP TABLE IF EXISTS word_frequencies")
-
-# Create new scrapes table with text mining metrics as JSON
+# Create tables if they don't exist
 c.execute("""
 CREATE TABLE IF NOT EXISTS scrapes (
     id INTEGER PRIMARY KEY,
@@ -493,9 +488,13 @@ def logout():
 @app.route("/", methods=["GET","POST"])
 def index():
     results = []
+    # Persist the selected agreement type for form
+    selected_type = 'tos'
     if request.method=="POST":
+        # Get domains and selected agreement type
         doms = request.form["domains"]
-        agreement_type = request.form.get("agreement_type", "tos")
+        selected_type = request.form.get("agreement_type", "tos")
+        agreement_type = selected_type
         
         for d in [x.strip() for x in doms.split(",") if x.strip()]:
             start_time = time.time()  # Start timing
@@ -647,7 +646,8 @@ def index():
             results.append(result)
             time.sleep(1)  # be polite
 
-    return render_template("index.html", results=results)
+    # Render with the selected agreement type to maintain form state
+    return render_template("index.html", results=results, selected_type=selected_type)
 
 @app.route("/sql_viewer", methods=["GET"])
 @login_required
