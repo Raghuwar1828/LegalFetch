@@ -3,8 +3,542 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Dashboard – Legal Fetch</title>
+  <title>Home – Legal Fetch</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <style>
+    /* Base styles */
+    .search-form {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 1rem;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+      width: 100%;
+    }
+    
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    
+    .form-group input[type="text"]:focus {
+      border-color: #2d4373;
+      outline: none;
+    }
+    
+    /* Document selection styling */
+    .doc-selection {
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 15px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .select-label {
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: #333;
+      font-size: 1.1em;
+    }
+    
+    .radio-group {
+      display: flex;
+      gap: 20px;
+    }
+    
+    .radio-option {
+      display: inline-flex;
+      align-items: center;
+      background-color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .radio-option:hover {
+      border-color: #2d4373;
+      background-color: #f8f9fa;
+    }
+    
+    .radio-option input[type="radio"] {
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    
+    .radio-option input[type="radio"]:checked + span {
+      color: #2d4373;
+      font-weight: 600;
+    }
+    
+    /* Submit button */
+    button[type="submit"] {
+      background-color: #2d4373;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      transition: all 0.3s;
+      width: 100%;
+      max-width: 200px;
+      margin: 0 auto;
+    }
+    
+    button[type="submit"]:hover {
+      background-color: #1e2f4f;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* Results card styling */
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 20px 0;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .card h3 {
+      color: #2d4373;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+    }
+    
+    /* Metrics sections styling */
+    .summaries-section {
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      text-align: left;
+    }
+    
+    .metric-column {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      text-align: left;
+    }
+    
+    .summary-box {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      text-align: left;
+    }
+    
+    .summary-box p {
+      margin: 0;
+      line-height: 1.5;
+      text-align: left;
+    }
+    
+    .text-preview {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    
+    .text-mining-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+    
+    .metric-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .metric-section h5 {
+      color: #2d4373;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .metric-section h6 {
+      color: #666;
+      margin: 15px 0 10px;
+      font-size: 0.95em;
+    }
+    
+    .metric-section ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .metric-section li {
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .metric-section li:last-child {
+      border-bottom: none;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .radio-group {
+        flex-direction: column;
+      }
+      
+      .text-mining-metrics {
+        grid-template-columns: 1fr;
+      }
+      
+      .card {
+        padding: 15px;
+      }
+    }
+    
+    /* Score indicators */
+    .score-indicator {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .score-good {
+      background-color: #e3f7e3;
+      color: #2e7d32;
+    }
+    
+    .score-medium {
+      background-color: #fff3e0;
+      color: #f57c00;
+    }
+    
+    .score-poor {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+    
+    /* Word cloud visualization */
+    .word-cloud {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+      text-align: center;
+    }
+    
+    .word-item {
+      display: inline-block;
+      margin: 5px;
+      padding: 5px 10px;
+      background: #f0f0f0;
+      border-radius: 15px;
+      font-size: var(--size);
+      color: #2d4373;
+      transition: all 0.2s;
+    }
+    
+    .word-item:hover {
+      transform: scale(1.1);
+      background: #e0e0e0;
+    }
+
+    /* Word Analysis Grid */
+    .word-analysis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin: 20px 0;
+    }
+
+    /* Word Frequency List */
+    .word-freq-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .word-freq-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .word {
+        min-width: 100px;
+        font-weight: 500;
+    }
+
+    .freq-bar-container {
+        flex-grow: 1;
+        background: #f0f0f0;
+        border-radius: 4px;
+        height: 24px;
+        overflow: hidden;
+    }
+
+    .freq-bar {
+        height: 100%;
+        background: #2d4373;
+        color: white;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        font-size: 0.9em;
+        transition: width 0.3s ease;
+        width: var(--w);
+    }
+
+    /* Word Importance (TF-IDF) */
+    .word-importance-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .importance-bar-container {
+        flex-grow: 1;
+        background: #f0f0f0;
+        border-radius: 4px;
+        height: 24px;
+        overflow: hidden;
+    }
+
+    .importance-bar {
+        height: 100%;
+        background: #4CAF50;
+        color: white;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        font-size: 0.9em;
+        transition: width 0.3s ease;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .stat-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .stat-label {
+        display: block;
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+    }
+
+    .stat-value {
+        display: block;
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #2d4373;
+    }
+
+    /* Unique Words Cloud */
+    .unique-words-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 15px;
+    }
+
+    .unique-word {
+        background: #e3f2fd;
+        color: #1565c0;
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 0.9em;
+        transition: all 0.2s;
+    }
+
+    .unique-word:hover {
+        background: #1565c0;
+        color: white;
+        transform: scale(1.05);
+    }
+
+    /* New styles for separated sections */
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .text-mining-section {
+      margin: 30px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 12px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .metric-box {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .metric-value {
+      font-size: 1.8em;
+      font-weight: 600;
+      color: #2d4373;
+      margin: 10px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
+    }
+
+    .metric-label {
+      font-size: 0.5em;
+      color: #666;
+      font-weight: normal;
+    }
+
+    .important-terms-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .term-chip {
+      background: #e3f2fd;
+      padding: 8px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .term-word {
+      color: #1565c0;
+      font-weight: 500;
+    }
+
+    .term-score {
+      background: #1565c0;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 0.8em;
+    }
+
+    @media (max-width: 768px) {
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .metric-value {
+        font-size: 1.5em;
+      }
+    }
+
+    /* Add these styles in the style section */
+    .processing-time {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #f8f9fa;
+      padding: 6px 12px;
+      border-radius: 6px;
+      margin: 10px 0;
+    }
+
+    .time-label {
+      color: #666;
+      font-weight: 500;
+    }
+
+    .time-value {
+      color: #2d4373;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    .sub-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .sub-metric {
+      background: #f8f9fa;
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .sub-label {
+      display: block;
+      font-size: 0.8em;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .sub-value {
+      display: block;
+      font-weight: 600;
+      color: #2d4373;
+    }
+
+    .terms-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    /* Word Frequency Section styling */
+    .frequency-section {
+      margin-top: 30px;
+      padding-top: 10px;
+    }
+    
+    .frequency-section h4 {
+      margin-bottom: 20px;
+    }
+  </style>
 </head>
 <body>
     <nav class="navbar">
@@ -12,68 +546,159 @@
           <a href="{{ url_for('index') }}" class="brand">Legal Fetch</a>
           <ul class="nav-links">
             {% if 'user_id' in session %}
-              <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+              <li><a href="{{ url_for('index') }}">Home</a></li>
+              <li><a href="{{ url_for('sql_viewer') }}">SQL Viewer</a></li>
+            {% endif %}
+            <li><a href="{{ url_for('about') }}">About</a></li>
+            {% if 'user_id' in session %}
               <li><a href="{{ url_for('logout') }}">Logout</a></li>
             {% else %}
               <li><a href="{{ url_for('login') }}">Login</a></li>
               <li><a href="{{ url_for('register') }}">Register</a></li>
             {% endif %}
           </ul>
-          <div class="nav-right">
-            <a href="{{ url_for('about') }}">About</a>
-          </div>
         </div>
       </nav>
       
 
   <div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container" style="margin-bottom: 1rem;">
+          {% for category, msg in messages %}
+            <div class="flash {{ category }}" style="width: auto;">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
     <h2>Enter Domain(s)</h2>
-    <form method="POST">
-      <input
-        type="text"
-        name="domains"
-        placeholder="e.g. google.com, example.org"
-        required
-      />
-      <button type="submit">Scrape & Analyze</button>
+    <form class="search-form" method="POST">
+      <div class="form-group">
+        <input
+          type="text"
+          name="domains"
+          placeholder="e.g. google.com, example.org"
+          required
+        />
+      </div>
+      
+      <div class="form-group doc-selection">
+        <p class="select-label">Select document type:</p>
+        <div class="radio-group">
+          <label class="radio-option">
+            <input type="radio" name="agreement_type" value="tos" {% if selected_type == 'tos' %}checked{% endif %}> 
+            <span>Terms of Service</span>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="agreement_type" value="pp" {% if selected_type == 'pp' %}checked{% endif %}> 
+            <span>Privacy Policy</span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <button type="submit">Scrape & Analyze</button>
+      </div>
     </form>
 
     {% for r in results %}
     <section class="card">
       <h3>{{ r.domain }}</h3>
-      <p><strong>TOS URL:</strong> <a href="{{ r.tos_url }}" target="_blank">{{ r.tos_url }}</a></p>
-      <p><strong>PP URL:</strong>  <a href="{{ r.pp_url  }}" target="_blank">{{ r.pp_url  }}</a></p>
-      <div class="texts">
-        <!-- <div><h4>Terms Text</h4><p>{{ r.tos_text[:500] }}…</p></div>
-        <div><h4>Privacy Text</h4><p>{{ r.pp_text [:500] }}…</p></div> -->
+      <p><strong>URL:</strong> <a href="{{ r.url }}" target="_blank">{{ r.url }}</a></p>
+      <p><strong>Document Type:</strong> 
+        {% if r.agreement_type == 'pp' %}Privacy Policy{% else %}Terms of Service{% endif %}
+      </p>
+      <div class="processing-time">
+        <span class="time-label">Processing Time:</span>
+        <span class="time-value">{{ r.processing_time }}</span>
       </div>
-      <div class="raw-output">
-        <h4>Raw Model Output</h4>
-        <div class="markdown-content">
-          {{ r.raw_html | safe }}
+      
+      {% if r.note %}
+      <div class="duplicate-notice" style="background-color: #e3f2fd; color: #1565c0; border-radius: 6px; padding: 8px 12px; margin: 10px 0; display: inline-flex; align-items: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+        </svg>
+        <span>{{ r.note }}</span>
+      </div>
+      {% endif %}
+      
+      <!-- Summaries Section -->
+      <div class="summaries-section">
+        <h4>Document Summary</h4>
+        <div class="metric-column">
+          <div class="summary-box">
+            <h6>Short Summary</h6>
+            <p>{{ r.summary_25 }}</p>
+          </div>
+          <div class="summary-box">
+            <h6>Detailed Summary</h6>
+            <p>{{ r.summary_100 }}</p>
+          </div>
         </div>
       </div>
-      <!-- <div class="summaries">
-        <h4>100-Word Summary</h4><p>{{ r.summary_100 }}</p>
-        <h4>  10-Word Summary</h4><p>{{ r.summary_10  }}</p>
-      </div> -->
-      <div class="freq">
-        <h4>Top TOS Words</h4>
-        <ul>
-          {% for w,cnt in r.freq_tos %}
-          <li>{{ w }}: {{ cnt }}</li>
+      
+      <!-- Word Frequency Section -->
+      <div class="frequency-section">
+        <h4>Word Frequency</h4>
+        <div class="word-freq-list">
+          {% for word, freq in r.text_metrics.word_frequency %}
+          <div class="word-freq-item">
+            <span class="word">{{ word }}</span>
+            <div class="freq-bar-container">
+              <div class="freq-bar" style="--w: {{ (freq / r.text_metrics.word_frequency[0][1] * 100)|round }}%">
+                <span class="freq-count">{{ freq }}</span>
+              </div>
+            </div>
+          </div>
           {% endfor %}
-        </ul>
-        <h4>Top PP Words</h4>
-        <ul>
-          {% for w,cnt in r.freq_pp %}
-          <li>{{ w }}: {{ cnt }}</li>
-          {% endfor %}
-        </ul>
+        </div>
       </div>
-      <div class="wordcloud">
-        <h4>Word Cloud</h4>
-        <img src="{{ r.wordcloud }}" alt="Word Cloud for {{ r.domain }}">
+      
+      <!-- Simplified Text Mining Metrics -->
+      <div class="text-mining-section">
+        <h4>Text Mining Metrics</h4>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <h5>Key Terms (Top 5 TF-IDF)</h5>
+            <div class="terms-cloud">
+              {% for term, score in r.text_metrics.tfidf %}
+              <div class="term-chip">
+                <span class="term-word">{{ term }}</span>
+                <span class="term-score">{{ score|round(3) }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="metric-box">
+            <h5>Readability Score</h5>
+            <div class="metric-value">{{ r.text_metrics.readability }}</div>
+          </div>
+          <div class="metric-box">
+            <h5>Sentiment Polarity</h5>
+            <div class="metric-value">{{ r.text_metrics.sentiment }}</div>
+          </div>
+          <div class="metric-box">
+            <h5>Document Length</h5>
+            <div class="sub-metrics">
+              <div class="sub-metric">
+                <span class="sub-label">Word Count</span>
+                <span class="sub-value">{{ r.text_metrics.word_count }}</span>
+              </div>
+              <div class="sub-metric">
+                <span class="sub-label">Sentence Count</span>
+                <span class="sub-value">{{ r.text_metrics.sentence_count }}</span>
+              </div>
+              <div class="sub-metric">
+                <span class="sub-label">Avg. Sentence Length</span>
+                <span class="sub-value">{{ r.text_metrics.avg_sentence_length }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="metric-box">
+            <h5>Hapax Legomena Ratio</h5>
+            <div class="metric-value">{{ (r.text_metrics.hapax_ratio * 100)|round(1) }}%</div>
+          </div>
+        </div>
       </div>
     </section>
     {% endfor %}

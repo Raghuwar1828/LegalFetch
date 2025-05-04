@@ -1,63 +1,142 @@
-# Legal Fetch
+# LegalFetch with Gemini API Integration
 
-A web application for fetching, analyzing, and summarizing legal documents like Terms of Service and Privacy Policies from websites.
+This application uses the Google Gemini API to analyze Terms of Service and Privacy Policy documents.
+
+## Setup Instructions
+
+1. Get a Gemini API key from [Google AI Studio](https://ai.google.dev/).
+
+2. Create a `.env` file in the root directory with your Gemini API key:
+   ```
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+4. Run the application:
+   ```
+   python app.py
+   ```
+
+## Testing the Gemini API
+
+You can test if your Gemini API is working correctly by running:
+
+```
+python test_gemini_http.py
+```
+
+This script will make a simple request to the Gemini API and display the response.
+
+## API Information
+
+This application uses the Gemini 2.0 Flash-Lite model, which provides:
+- Cost-efficient performance
+- Multimodal input support (text, image, video, audio)
+- 1 million token context window
+- Maximum 8k token output
+
+## Troubleshooting
+
+If you encounter issues with the API:
+
+1. Verify your API key is correct
+2. Check that you have internet connectivity
+3. Look for error messages in the console output
+4. Try running the test script to isolate API-specific issues
+
+## LegalFetch
+
+LegalFetch is a web application that analyzes Terms of Service and Privacy Policy documents.
 
 ## Features
 
-- User authentication system for secure access
-- Fetch terms of service and privacy policies from websites
-- Analyze text with NLP techniques
-- Generate word clouds and frequency analysis
-- Summarize documents using AI
-- Save and organize your analyses
+- Analyzes and summarizes Terms of Service and Privacy Policy documents
+- Extracts key metrics like readability, sentiment, and word frequency
+- Provides API access for document processing
 
-## Technologies Used
+## Majestic Million Scraper
 
-- Python 3.10+
-- Flask web framework
-- NLTK for natural language processing
-- OpenAI API for AI-powered summaries
-- SQLite for database
-- HTML/CSS for frontend
+The application includes a utility script to scrape TOS/PP documents from top websites using the Majestic Million dataset.
 
-## Installation
+### Usage
 
-1. Clone the repository:
+1. Make sure the Flask application is running locally
+2. Run the scraper script:
+
 ```bash
-git clone https://github.com/Raghuwar1828/LegalFetch.git
-cd LegalFetch
+python scrape_majestic.py
 ```
 
-2. Create and activate a virtual environment:
+3. Follow the prompts to:
+   - Select whether to scrape Terms of Service (TOS), Privacy Policy (PP), or both from the numbered menu
+   - Set a success target (number of successfully processed websites to achieve)
+   - Continue from where you left off in a previous session or start from rank 1 by default
+   - Enter a starting rank (1-1,000,000) in the Majestic Million list
+
+### Progress Tracking
+
+The script provides detailed progress tracking with:
+
+- Current rank being processed
+- Number of successful scrapes so far
+- Remaining scrapes needed to reach your target
+- Percentage completion toward your target
+
+After each website is processed, you'll see a progress report showing this information. The script will automatically continue until your success target is reached.
+
+### Processing Options
+
+The script offers three processing modes:
+
+- **TOS**: Processes only Terms of Service documents for each website
+- **PP**: Processes only Privacy Policy documents for each website
+- **Both**: Processes both TOS and PP for each website in sequence
+
+When using the "both" option, the script will attempt to find and process both document types for each website. Results will be classified as:
+- Full success: Both TOS and PP processed successfully
+- Partial success: Only one document type was processed successfully
+- Failure: Neither document type was processed successfully
+
+The script will:
+- Download the Majestic Million dataset if not already present
+- Process websites starting from your specified rank
+- Send each website to your local API endpoint
+- Save successfully processed documents to your database
+- Track your progress in a file called `scraper_progress.json` for easy resuming later
+
+### Resuming a Previous Session
+
+The scraper saves your progress after each processed website. When you restart the script:
+
+1. Select the same agreement type (tos/pp) you were working with
+2. The script will detect your previous progress and offer to continue from the next rank
+3. If you accept, it will resume processing from the next website in the ranked list
+
+## API Endpoint
+
+The application provides a REST API endpoint for processing documents:
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+curl -X POST http://localhost:5000/api/process \
+  -H "Content-Type: application/json" \
+  -d '{"url": "example.com", "agreement_type": "tos"}'
 ```
 
-3. Install the dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Set up your OpenAI API key in a .env file:
-```
-OPENAI_API_KEY=your_api_key_here
-```
-
-5. Run the application:
-```bash
-python app.py
-```
-
-6. Open your browser and navigate to `http://127.0.0.1:5000`
-
-## Usage
-
-1. Register an account or log in
-2. Enter domain names in the search field
-3. View and analyze the fetched legal documents
-4. Save analyses for future reference
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
+Response example (success):
+```json
+{
+  "success": true,
+  "domain": "example.com",
+  "url": "https://example.com/terms",
+  "agreement_type": "tos",
+  "summary_25": "Brief summary...",
+  "summary_100": "Longer summary...",
+  "text_metrics": { ... },
+  "processing_time": "2.91s",
+  "message": "Successfully processed and saved to database"
+}
+``` 
