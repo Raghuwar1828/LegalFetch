@@ -870,7 +870,7 @@ def index():
                     "text_length": len(text.split()) if 'text' in locals() else 0,
                     "summary_100": f"Error: {error_message}",
                     "summary_25": f"Error: Processing failed",
-                    "text_metrics": {} if 'text_metrics' not in locals() else text_metrics,
+                    "text_metrics": text_metrics if 'text_metrics' in locals() else calculate_simple_metrics(""),
                     "processing_time": time_str,
                     "note": f"Failed: {error_message} - Not saved to database"
                 }
