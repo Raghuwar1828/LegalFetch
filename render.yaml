@@ -6,8 +6,4 @@ services:
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: GEMINI_API_KEY
-        sync: false
-      - key: PYTHON_VERSION
-        value: 3.10.12
-      - key: PYTHONUNBUFFERED
-        value: true 
+        sync: false 
