@@ -408,6 +408,31 @@
             </tbody>
           </table>
         </div>
+        
+        <!-- Pagination controls at the bottom -->
+        {% if selected_table and table_data %}
+        <div class="pagination" style="display: flex; justify-content: space-between; margin: 20px 0;">
+          <div>
+            {% if page > 1 %}
+            <a href="{{ url_for('sql_viewer', table=selected_table, page=1, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+               class="pagination-btn first-btn" style="margin-right: 10px;">&laquo; First</a>
+            <a href="{{ url_for('sql_viewer', table=selected_table, page=page-1, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+               class="pagination-btn prev-btn">Previous</a>
+            {% endif %}
+          </div>
+          <div class="page-info">
+            Page {{ page }} of {{ total_pages }} ({{ total_rows }} total records)
+          </div>
+          <div>
+            {% if has_more %}
+            <a href="{{ url_for('sql_viewer', table=selected_table, page=page+1, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+               class="pagination-btn next-btn">Next</a>
+            <a href="{{ url_for('sql_viewer', table=selected_table, page=total_pages, columns=selected_columns, agreement_type=agreement_type_filter) }}" 
+               class="pagination-btn last-btn" style="margin-left: 10px;">Last &raquo;</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
       {% else %}
         <div class="no-data">
           <p>No data available for this table.</p>
