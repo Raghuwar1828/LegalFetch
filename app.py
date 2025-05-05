@@ -14,9 +14,13 @@ from flask import (
 )
 
 import nltk
-nltk.download('stopwords')
+# Ensure all required NLTK resources are downloaded
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True, raise_on_error=False)  # Add punkt_tab resource
+nltk.download('stopwords', quiet=True)
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize, sent_tokenize
+from nltk.tokenize import word_tokenize as nltk_word_tokenize
+from nltk.tokenize import sent_tokenize as nltk_sent_tokenize
 from collections import Counter
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
@@ -496,8 +500,15 @@ def calculate_text_metrics(tos_text, pp_text):
             sentiment = {'polarity': 0, 'subjectivity': 0}
             
         # 4. Document Length Metrics
-        words = word_tokenize(text)
-        sentences = sent_tokenize(text)
+        try:
+            words = word_tokenize(text)
+            sentences = sent_tokenize(text)
+        except LookupError as e:
+            # Fallback to simple splitting if NLTK resources are missing
+            print(f"NLTK resource error: {str(e)}. Using simple tokenization as fallback.")
+            words = text.split()
+            sentences = re.split(r'[.!?]+', text)
+            
         # filter out non-alphanumeric tokens
         clean_words = [w for w in words if w.isalnum()]
         num_words = len(clean_words)
@@ -557,8 +568,15 @@ def calculate_simple_metrics(text):
     blob = TextBlob(text)
     polarity = round(blob.sentiment.polarity, 3)
     # Document length metrics
-    words = word_tokenize(text)
-    sentences = sent_tokenize(text)
+    try:
+        words = word_tokenize(text)
+        sentences = sent_tokenize(text)
+    except LookupError as e:
+        # Fallback to simple splitting if NLTK resources are missing
+        print(f"NLTK resource error: {str(e)}. Using simple tokenization as fallback.")
+        words = text.split()
+        sentences = re.split(r'[.!?]+', text)
+        
     clean_words = [w for w in words if w.isalnum()]
     wcount = len(clean_words)
     scount = len(sentences)
@@ -665,6 +683,21 @@ Here is the document content:
 {text}"""
     
     return prompt
+
+# Define safe tokenization functions that handle missing NLTK resources
+def word_tokenize(text):
+    try:
+        return nltk_word_tokenize(text)
+    except LookupError as e:
+        print(f"NLTK resource error in word_tokenize: {str(e)}. Using fallback.")
+        return text.split()
+
+def sent_tokenize(text):
+    try:
+        return nltk_sent_tokenize(text)
+    except LookupError as e:
+        print(f"NLTK resource error in sent_tokenize: {str(e)}. Using fallback.")
+        return re.split(r'[.!?]+', text)
 
 # --- ROUTES ---
 @app.route("/register", methods=["GET","POST"])
@@ -1142,18 +1175,6 @@ def api_process():
             "success": False,
             "error": f"Server error: {str(e)}"
         }), 500
-
-# Download NLTK resources
-nltk.download('punkt')
-nltk.download('stopwords')
-
-# Remove spaCy model loading
-# try:
-#     nlp = spacy.load("en_core_web_sm")
-# except:
-#     import subprocess
-#     subprocess.call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
-#     nlp = spacy.load("en_core_web_sm")
 
 if __name__=="__main__":
     port = int(os.environ.get("PORT", 5000))
