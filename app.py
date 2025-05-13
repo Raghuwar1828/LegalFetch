@@ -1033,29 +1033,13 @@ def api_process():
         existing_record = c.fetchone()
         
         if existing_record:
-            # Record already exists, return it
-            c.execute("SELECT * FROM scrapes WHERE id = ?", (existing_record[0],))
-            record = c.fetchone()
-            
-            # Extract company name and prefix summaries
-            company_name = extract_company_name(domain)
-            
-            # Format the result for API response
-            text_metrics = eval(record[7])  # Convert the string back to a dictionary
-            
-            result = {
-                "success": True,
-                "domain": record[1],
-                "agreement_type": record[2],
-                "url": record[3],
-                "text_length": record[4],
-                "summary_100": record[5],
-                "summary_25": record[6],
-                "text_metrics": text_metrics,
-                "message": "Retrieved from database (already exists)"
-            }
-            
-            return jsonify(result)
+            # Record already exists, return an error to avoid duplicate counting
+            return jsonify({
+                "success": False, 
+                "error": f"Domain '{domain}' with agreement type '{agreement_type}' already exists in database",
+                "domain": domain,
+                "agreement_type": agreement_type
+            }), 409  # 409 Conflict is appropriate for this case
         
         # All-or-nothing approach: only save to DB if everything succeeds
         try:
@@ -1175,6 +1159,54 @@ def api_process():
             "success": False,
             "error": f"Server error: {str(e)}"
         }), 500
+
+@app.route("/api/stats", methods=["GET"])
+def api_stats():
+    """
+    API endpoint to get statistics about the database
+    Can filter by agreement_type with the 'type' query parameter
+    """
+    try:
+        agreement_type = request.args.get("type")
+        
+        if agreement_type:
+            if agreement_type not in ["tos", "pp"]:
+                return jsonify({"success": False, "error": "Type must be 'tos' or 'pp'"}), 400
+                
+            # Get count for specified agreement type
+            c.execute("SELECT COUNT(*) FROM scrapes WHERE agreement_type = ?", (agreement_type,))
+            count = c.fetchone()[0]
+            
+            return jsonify({
+                "success": True, 
+                "type": agreement_type,
+                "count": count
+            })
+        else:
+            # Get overall stats
+            c.execute("SELECT COUNT(*) FROM scrapes")
+            total = c.fetchone()[0]
+            
+            c.execute("SELECT COUNT(*) FROM scrapes WHERE agreement_type = 'tos'")
+            tos_count = c.fetchone()[0]
+            
+            c.execute("SELECT COUNT(*) FROM scrapes WHERE agreement_type = 'pp'")
+            pp_count = c.fetchone()[0]
+            
+            # Get stats on most recent entries
+            c.execute("SELECT domain, agreement_type, timestamp FROM scrapes ORDER BY timestamp DESC LIMIT 5")
+            recent_entries = [{"domain": r[0], "type": r[1], "timestamp": r[2]} for r in c.fetchall()]
+            
+            return jsonify({
+                "success": True,
+                "total_records": total,
+                "tos_count": tos_count,
+                "pp_count": pp_count,
+                "recent_entries": recent_entries
+            })
+            
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__=="__main__":
     port = int(os.environ.get("PORT", 5000))
