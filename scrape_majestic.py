@@ -33,22 +33,26 @@ def download_majestic_million():
         return False
 
 def get_agreement_type():
-    """Ask user if they want to scrape pp, tos, or both"""
-    print("\nSelect the agreement type to process:")
-    print("1. TOS (Terms of Service)")
-    print("2. PP (Privacy Policy)")
-    print("3. Both TOS and PP")
+    """Get the agreement type preference from the user"""
+    print("\nSelect an option:")
+    print("1. Terms of Service (TOS)")
+    print("2. Privacy Policy (PP)")
+    print("3. Both (TOS then PP)")
+    print("4. Reset progress to match database counts")
     
-    while True:
-        choice = input("\nEnter your choice (1-3): ").strip()
-        if choice == "1":
-            return "tos"
-        elif choice == "2":
-            return "pp"
-        elif choice == "3":
-            return "both"
-        else:
-            print("Invalid input. Please enter a number from 1 to 3.")
+    choice = input("\nEnter your choice (1-4): ")
+    
+    if choice == "1":
+        return "tos"
+    elif choice == "2":
+        return "pp"
+    elif choice == "3":
+        return "both"
+    elif choice == "4":
+        return "reset"
+    else:
+        print("Invalid choice. Defaulting to TOS.")
+        return "tos"
 
 def get_success_target():
     """Ask user for target number of successful scrapes"""
@@ -326,6 +330,12 @@ def process_single_agreement(domain, agreement_type):
             print(f"✅ Success: {domain} - {agreement_type.upper()}")
             print(f"Summary: {result.get('summary_25', '')[:100]}...")
             return True
+        elif response.status_code == 409:
+            # Record already exists in database
+            print(f"⚠️ Skipped: {domain} - {agreement_type.upper()} (already exists in database)")
+            print(f"Error: {result.get('error', 'Unknown error')}")
+            # Return False so it doesn't count as a success for progress tracking
+            return False
         else:
             print(f"❌ Failed: {domain} - {agreement_type.upper()}")
             print(f"Error: {result.get('error', 'Unknown error')}")
@@ -343,6 +353,66 @@ def continue_processing():
     response = input("\nContinue processing? (y/n): ").lower().strip()
     return response == 'y' or response == 'yes'
 
+def reset_progress_to_match_db():
+    """Reset the progress in the progress file to match the actual database counts"""
+    try:
+        # Check if we can connect to the API endpoint
+        try:
+            # Make a simple request to see if the API is running
+            requests.get("http://localhost:5000/")
+        except:
+            print("Error: Cannot connect to API. Make sure the server is running.")
+            return False
+        
+        print("Connecting to database to get accurate counts...")
+        
+        # Get actual TOS count from database
+        response = requests.get("http://localhost:5000/api/stats?type=tos")
+        if response.status_code != 200:
+            print("Error getting TOS stats from API")
+            return False
+        tos_count = response.json().get('count', 0)
+        
+        # Get actual PP count from database
+        response = requests.get("http://localhost:5000/api/stats?type=pp")
+        if response.status_code != 200:
+            print("Error getting PP stats from API")
+            return False
+        pp_count = response.json().get('count', 0)
+        
+        # Get current progress
+        if not os.path.exists(PROGRESS_FILE):
+            progress = {
+                'tos': {'rank': 0, 'successes': 0},
+                'pp': {'rank': 0, 'successes': 0}
+            }
+        else:
+            with open(PROGRESS_FILE, 'r') as f:
+                progress = json.load(f)
+        
+        # Get current ranks
+        tos_rank = progress.get('tos', {}).get('rank', 0)
+        pp_rank = progress.get('pp', {}).get('rank', 0)
+        
+        # Update progress with correct counts
+        progress = {
+            'tos': {'rank': tos_rank, 'successes': tos_count},
+            'pp': {'rank': pp_rank, 'successes': pp_count}
+        }
+        
+        # Save updated progress
+        with open(PROGRESS_FILE, 'w') as f:
+            json.dump(progress, f)
+        
+        print(f"Progress file updated to match database counts:")
+        print(f"TOS: {tos_count} records (rank: {tos_rank})")
+        print(f"PP: {pp_count} records (rank: {pp_rank})")
+        return True
+        
+    except Exception as e:
+        print(f"Error resetting progress: {e}")
+        return False
+
 def main():
     # Download Majestic Million data if needed
     if not download_majestic_million():
@@ -351,6 +421,12 @@ def main():
     
     # Get user preferences
     agreement_type = get_agreement_type()
+    
+    # Special command to reset progress
+    if agreement_type == "reset":
+        reset_progress_to_match_db()
+        return
+    
     success_target = get_success_target()
     start_rank = get_start_rank(agreement_type)
     
