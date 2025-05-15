@@ -9,7 +9,6 @@ gunicorn
 python-dotenv
 scikit-learn>=1.0.0
 rake-nltk
-spacy
 textstat
 textblob
 google-generativeai>=0.3.0
@@ -17,4 +16,3 @@ lxml>=4.9.0
 scipy>=1.8.0
 pandas>=1.4.0
 SQLAlchemy>=1.4.0
-langdetect>=1.0.9
