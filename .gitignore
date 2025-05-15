@@ -44,7 +44,6 @@ var/
 
 # Majestic Million data file and progress
 majestic_million.csv
-scraper_progress.json
 
 # OS specific
 .DS_Store
